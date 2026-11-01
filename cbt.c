@@ -11,6 +11,24 @@
 static str0 suffix;
 static int output_failed;
 static FILE *snapshot_output;
+static int raw_stream;
+
+static void encode(FILE *output, const char *s);
+
+static void response(const char *message)
+{
+  fputs(message, stdout);
+  putchar(raw_stream ? 0 : '\n');
+}
+
+static void response_suffix(const char *tag, const char *value)
+{
+  fputs(tag, stdout);
+  putchar('\t');
+  if (raw_stream) fputs(value, stdout);
+  else encode(stdout, value);
+  putchar(raw_stream ? 0 : '\n');
+}
 
 static int fail(const char *message)
 {
@@ -126,7 +144,7 @@ static int load_snapshot(const char *path, critbit0_tree *tree,
   }
   critbit0_clear(tree, pool);
   *tree = replacement;
-  puts("loaded");
+  response("loaded");
   return 0;
 }
 
@@ -194,15 +212,13 @@ static int save_snapshot(const char *path, critbit0_tree *tree,
   if (!ok) unlink(temporary);
   free(temporary);
   if (!ok) return fail("save failed");
-  puts("saved");
+  response("saved");
   return 0;
 }
 
 static int match(void)
 {
-  fputs("match\t", stdout);
-  encode(stdout, suffix);
-  putchar('\n');
+  response_suffix("match", suffix);
   if (ferror(stdout)) {
     output_failed = 1;
     return 0;
@@ -219,47 +235,45 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
   if (!tab) {
     if (strcmp(line, "clear") != 0) return fail("invalid request");
     critbit0_clear(tree, pool);
-    puts("cleared");
+    response("cleared");
     return 0;
   }
   *tab++ = 0;
-  if (!decode(tab)) return fail("invalid operand");
+  if (!raw_stream && !decode(tab)) return fail("invalid operand");
   key = tab;
   if (strcmp(line, "load") == 0) {
     return load_snapshot(key, tree, pool);
   } else if (strcmp(line, "save") == 0) {
     return save_snapshot(key, tree, pool);
   } else if (strcmp(line, "contains") == 0) {
-    puts(critbit0_contains(tree, &key) ? "present" : "absent");
+    response(critbit0_contains(tree, &key) ? "present" : "absent");
   } else if (strcmp(line, "insert") == 0) {
     result = critbit0_insert(tree, pool, &key);
     if (!result) return fail("insert failed");
-    puts(result == 2 ? "inserted" : "exists");
+    response(result == 2 ? "inserted" : "exists");
   } else if (strcmp(line, "delete") == 0) {
-    puts(critbit0_delete(tree, pool, &key) ? "deleted" : "missing");
+    response(critbit0_delete(tree, pool, &key) ? "deleted" : "missing");
   } else if (strcmp(line, "firstprefixed") == 0) {
     errno = 0;
     result = critbit0_firstprefixed(tree, pool, &suffix, &key);
     if (!result && errno) return fail("prefix lookup failed");
     if (result) {
-      fputs("found\t", stdout);
-      encode(stdout, suffix);
-      putchar('\n');
+      response_suffix("found", suffix);
       str0_free(&suffix, pool);
-    } else puts("notfound");
+    } else response("notfound");
   } else if (strcmp(line, "allprefixed") == 0) {
     result = critbit0_allprefixed(tree, pool, &suffix, &key, match);
     str0_free(&suffix, pool);
     if (result < 0) return fail("prefix lookup failed");
     if (output_failed || result == 0) return fail("output failed");
-    puts("end");
+    response("end");
   } else {
     return fail("invalid request");
   }
   return 0;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
   critbit0_tree tree = { 0 };
   limitmalloc_pool pool = { LIMITMALLOC_MAX, 0, 0 };
@@ -267,14 +281,20 @@ int main(void)
   size_t capacity = 0;
   ssize_t length;
   int status = 0;
+  int terminator;
 
-  while ((length = getline(&line, &capacity, stdin)) != -1) {
-    if (length == 0 || line[length - 1] != '\n') {
+  if (argc == 1) raw_stream = 0;
+  else if (argc == 2 && strcmp(argv[1], "-0") == 0) raw_stream = 1;
+  else return fail("unsupported option");
+  terminator = raw_stream ? 0 : '\n';
+
+  while ((length = getdelim(&line, &capacity, terminator, stdin)) != -1) {
+    if (length == 0 || line[length - 1] != terminator) {
       status = fail("unterminated request");
       break;
     }
     line[length - 1] = 0;
-    if (memchr(line, 0, (size_t) length - 1)) {
+    if (!raw_stream && memchr(line, 0, (size_t) length - 1)) {
       status = fail("invalid request");
       break;
     }

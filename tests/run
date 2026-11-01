@@ -135,8 +135,32 @@ _cbt 'insert\t\x41' 'contains\tx'
 _run cbt-invalid-control
 { printf 'insert\tx\001\ncontains\tx\n' | ./cbt 2>&1; echo "$?"; } | _sanitize
 
+_hex() {
+  od -An -tx1 | tr -d ' \n'
+  printf '\n'
+}
+
 _run cbt-unterminated
 { printf 'insert\tx' | ./cbt 2>&1; echo "$?"; } | _sanitize
+
+_run cbt-nul-stream
+{ printf 'insert\tpre\n\t\\z\000contains\tpre\n\t\\z\000firstprefixed\tpre\000allprefixed\tpre\000' \
+| "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-nul-statuses
+: > "${basedir}/nul-empty"
+{ printf 'contains\tx\000insert\tx\000insert\tx\000delete\ty\000delete\tx\000firstprefixed\tx\000allprefixed\tx\000clear\000save\ttests/basedir/nul-empty\000load\ttests/basedir/nul-empty\000' \
+| "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-nul-incomplete
+{ printf 'insert\tx' | "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output" 2>&1; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-unsupported-option
+{ "${home}/tests/prefix/bin/cbt" -x > "${basedir}/nul-output" 2>&1; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
 
 _run cbt-snapshot-roundtrip
 _cbt 'insert\t' 'insert\tB' 'insert\tA' \

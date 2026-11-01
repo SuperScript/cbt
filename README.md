@@ -87,7 +87,7 @@ deleted ca: 1
 
 ## Command stream
 
-The installed `tests/prefix/bin/cbt` reads one request per line from standard input and writes tagged responses to standard output. A request has a verb, a tab, and an operand; `clear` has no operand. An empty operand is a valid empty key. One process keeps its tree across requests. Errors go to standard error and stop the process.
+The installed `tests/prefix/bin/cbt` reads requests from standard input and writes tagged responses to standard output. By default, each record ends with LF. The `-0` option uses NUL to end each request and response. A request has a verb, a tab, and an operand; `clear` has no operand. The first tab separates the verb from the operand. An empty operand is a valid empty key. One process keeps its tree across requests. Errors go to standard error and stop the process.
 
 | Request | Response |
 | --- | --- |
@@ -100,7 +100,7 @@ The installed `tests/prefix/bin/cbt` reads one request per line from standard in
 | `load` | `loaded` |
 | `save` | `saved` |
 
-The operand and returned suffix use printable ASCII directly, except backslash (`\\`), tab (`\t`), newline (`\n`), and carriage return (`\r`) use those escapes. Encode other bytes as `\xHH` with uppercase hex digits. NUL (`\x00`), invalid escapes, and unescaped control bytes are rejected. For example:
+In the default LF mode, the operand and returned suffix use printable ASCII directly, except backslash (`\\`), tab (`\t`), newline (`\n`), and carriage return (`\r`) use those escapes. Encode other bytes as `\xHH` with uppercase hex digits. NUL (`\x00`), invalid escapes, and unescaped control bytes are rejected. In `-0` mode, operands and suffixes contain raw non-NUL bytes; backslashes have no special meaning. A request without its ending NUL fails. Snapshot files still use the LF format described below. For example:
 
 ```sh
 printf 'insert\tca\ninsert\tcb\nfirstprefixed\tc\nallprefixed\tc\n' | tests/prefix/bin/cbt
@@ -118,6 +118,12 @@ end
 ```
 
 The gaps after `found` and `match` above are tabs.
+
+The following command sends a key containing a literal newline and prints the NUL-framed response as hexadecimal bytes:
+
+```sh
+printf 'insert\tA\nB\000firstprefixed\tA\000' | tests/prefix/bin/cbt -0 | od -An -tx1
+```
 
 ## Snapshots
 
