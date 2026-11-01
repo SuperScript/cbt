@@ -14,7 +14,7 @@ Anyone who needs crit-bit trees can use the library from a program or run its co
 
 ## Installation
 
-Install with `make install`, setting `PREFIX` to the desired location.
+Run `make install PREFIX=/path/to/prefix` to install `libcritbit0.a` in `PREFIX/lib` and the public headers in `PREFIX/include`.
 
 ## Daily use
 

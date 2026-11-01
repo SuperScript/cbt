@@ -46,3 +46,14 @@ delete existing: yes
 remaining key: yes
 clear releases: yes
 0
+
+
+==== critbit0-installed ====
+
+installed insert: yes
+installed contains: yes
+installed first: yes
+installed all: yes
+installed delete: yes
+installed clear: yes
+0

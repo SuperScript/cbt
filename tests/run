@@ -12,11 +12,11 @@ _sanitize() {
 }
 
 _check() {
-  { "$@" 2>&1; echo $?; } | _sanitize
+  { "$@" 2>&1; echo "$?"; } | _sanitize
 }
 
 _check_err() {
-  { "$@" 2>&1; echo $?; } | grep -E 'fatal:|^[0-9]+' | _sanitize
+  { "$@" 2>&1; echo "$?"; } | grep -E 'fatal:|^[0-9]+' | _sanitize
 }
 
 _run() {
@@ -63,3 +63,14 @@ then
   exit 1
 fi
 _check "${basedir}/critbit0_operations"
+
+_run critbit0-installed
+if ! "${CC:-cc}" -I"${home}/tests/prefix/include" \
+  -o "${basedir}/critbit0_installed" tests/critbit0_installed.c \
+  -L"${home}/tests/prefix/lib" -lcritbit0 \
+  2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/critbit0_installed"
