@@ -1,4 +1,24 @@
-# cbt
+# Crit Bit Trees
+
+## Why
+
+The project makes crit-bit trees available as a simple, flexible structure for many applications.
+
+## Payoff
+
+It offers an alternative to CDB that can perform better when reads are few relative to writes.
+
+## Users and use
+
+Anyone who needs crit-bit trees can use the library from a program or run its commands.
+
+## Installation
+
+Install with `make install`, setting `PREFIX` to the desired location.
+
+## Daily use
+
+Call the library from a program or use the command-line tools.
 
 ## Imported source
 
