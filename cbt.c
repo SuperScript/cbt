@@ -10,6 +10,7 @@
 
 static str0 suffix;
 static int output_failed;
+static const char *match_prefix;
 static FILE *snapshot_output;
 static int raw_stream;
 
@@ -149,7 +150,9 @@ static int save_snapshot(const char *path, critbit0_tree *tree,
 
 static int match(void)
 {
-  response_suffix("match", suffix);
+  fputs(match_prefix, stdout);
+  fputs(suffix, stdout);
+  putchar(raw_stream ? 0 : '\n');
   if (ferror(stdout)) {
     output_failed = 1;
     return 0;
@@ -166,7 +169,6 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
   if (!tab) {
     if (strcmp(line, "clear") != 0) return fail("invalid request");
     critbit0_clear(tree, pool);
-    response("cleared");
     return 0;
   }
   *tab++ = 0;
@@ -176,13 +178,13 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
   } else if (strcmp(line, "save") == 0) {
     return save_snapshot(key, tree, pool);
   } else if (strcmp(line, "contains") == 0) {
-    response(critbit0_contains(tree, &key) ? "present" : "absent");
+    response(critbit0_contains(tree, &key) ? "1" : "0");
   } else if (strcmp(line, "insert") == 0) {
     result = critbit0_insert(tree, pool, &key);
+    response(result == 2 ? "2" : result == 1 ? "1" : "0");
     if (!result) return fail("insert failed");
-    response(result == 2 ? "inserted" : "exists");
   } else if (strcmp(line, "delete") == 0) {
-    response(critbit0_delete(tree, pool, &key) ? "deleted" : "missing");
+    response(critbit0_delete(tree, pool, &key) ? "1" : "0");
   } else if (strcmp(line, "firstprefixed") == 0) {
     errno = 0;
     result = critbit0_firstprefixed(tree, pool, &suffix, &key);
@@ -192,11 +194,14 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
       str0_free(&suffix, pool);
     } else response("notfound");
   } else if (strcmp(line, "allprefixed") == 0) {
+    if (!*key && critbit0_contains(tree, &key))
+      return fail("empty key cannot be listed");
+    match_prefix = key;
     result = critbit0_allprefixed(tree, pool, &suffix, &key, match);
     str0_free(&suffix, pool);
     if (result < 0) return fail("prefix lookup failed");
     if (output_failed || result == 0) return fail("output failed");
-    response("end");
+    response("");
   } else {
     return fail("invalid request");
   }

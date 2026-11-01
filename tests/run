@@ -119,8 +119,62 @@ _cbt 'firstprefixed\ta' 'insert\tab' 'firstprefixed\ta' 'firstprefixed\tz'
 _run cbt-allprefixed
 _cbt 'allprefixed\tz' 'insert\tab' 'insert\tac' 'allprefixed\ta'
 
+_run cbt-contains-absent-lf
+_cbt 'contains\tx'
+
+_run cbt-contains-present-lf
+_cbt 'insert\tx' 'contains\tx'
+
+_run cbt-insert-added-lf
+_cbt 'insert\tx'
+
+_run cbt-insert-existing-lf
+_cbt 'insert\tx' 'insert\tx'
+
+_run cbt-delete-missing-lf
+_cbt 'delete\tx'
+
+_run cbt-delete-present-lf
+_cbt 'insert\tx' 'delete\tx'
+
+_run cbt-clear-silent-lf
+_cbt 'clear'
+
+_run cbt-allprefixed-full-keys
+_cbt 'insert\tab' 'insert\tac' 'allprefixed\ta'
+
+_run cbt-allprefixed-unmatched
+_cbt 'allprefixed\tz'
+
 _run cbt-empty-key
 _cbt 'insert\t' 'contains\t' 'firstprefixed\t' 'allprefixed\t'
+
+_run cbt-allprefixed-empty-key-refusal
+{ printf 'insert\t\nallprefixed\t\n' | ./cbt > "${basedir}/raw-output" 2> "${basedir}/load-error"; echo "$?"; } | _sanitize
+_hex < "${basedir}/raw-output"
+cat "${basedir}/load-error"
+
+_run cbt-insert-allocation-failure
+cat > "${basedir}/cbt_insert_failure.c" <<'EOF'
+#define main cbt_program_main
+#include "../../cbt.c"
+#undef main
+
+int main(void)
+{
+  critbit0_tree tree = { 0 };
+  limitmalloc_pool pool = { 0, 0, 0 };
+  char request[] = "insert\tx";
+  return dispatch(request, &tree, &pool) == 1 ? 0 : 1;
+}
+EOF
+if ! "${CC:-cc}" -I. -o "${basedir}/cbt_insert_failure" \
+  "${basedir}/cbt_insert_failure.c" libcritbit0.a 2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/cbt_insert_failure"
 
 _run cbt-raw-lf-bytes
 { printf 'insert\tA\\\t\001\177\ncontains\tA\\\t\001\177\nfirstprefixed\tA\nallprefixed\tA\n' \
@@ -147,6 +201,34 @@ _run cbt-unterminated
 _run cbt-nul-stream
 { printf 'insert\tpre\n\t\\z\000contains\tpre\n\t\\z\000firstprefixed\tpre\000allprefixed\tpre\000' \
 | "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-contains-absent-nul
+{ printf 'contains\tx\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-contains-present-nul
+{ printf 'insert\tx\000contains\tx\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-insert-added-nul
+{ printf 'insert\tx\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-insert-existing-nul
+{ printf 'insert\tx\000insert\tx\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-delete-missing-nul
+{ printf 'delete\tx\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-delete-present-nul
+{ printf 'insert\tx\000delete\tx\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-clear-silent-nul
+{ printf 'clear\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
 _hex < "${basedir}/nul-output"
 
 _run cbt-nul-statuses

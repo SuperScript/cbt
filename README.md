@@ -87,37 +87,26 @@ deleted ca: 1
 
 ## Command stream
 
-The installed `tests/prefix/bin/cbt` reads requests from standard input and writes tagged responses to standard output. By default, each record ends with LF. The `-0` option uses NUL to end each request and response. A request has a verb, a tab, and an operand; `clear` has no operand. The first tab separates the verb from the operand. An empty operand is a valid empty key. One process keeps its tree across requests. Errors go to standard error and stop the process.
+The installed `tests/prefix/bin/cbt` reads requests from standard input and writes results to standard output. By default, each record ends with LF. The `-0` option uses NUL. A request has a verb, a tab, and an operand; `clear` has no operand. The first tab separates the verb from the operand. An empty operand is a valid empty key. One process keeps its tree across requests. Errors go to standard error and stop the process.
 
 | Request | Response |
 | --- | --- |
-| `contains` | `present` or `absent` |
-| `insert` | `inserted` or `exists` |
-| `delete` | `deleted` or `missing` |
-| `clear` | `cleared` |
+| `contains` | `1` if present, `0` if absent |
+| `insert` | `2` if added, `1` if present, `0` on allocation failure |
+| `delete` | `1` if deleted, `0` if absent |
+| `clear` | No output |
 | `firstprefixed` | `found<TAB>suffix` or `notfound` |
-| `allprefixed` | Zero or more `match<TAB>suffix` lines, then `end` |
+| `allprefixed` | Zero or more bare full keys, then an empty record |
 | `load` | `loaded` |
 | `save` | `saved` |
 
-Operands and returned suffixes carry raw bytes in both modes; backslashes, tabs, and control bytes have no special encoding. NUL cannot occur in a key. In the default mode, LF ends a record and cannot occur inside a key. The `-0` mode permits LF inside a key. A request without its selected ending delimiter fails. Snapshot files use the selected mode's delimiter as described below. For example:
+An `allprefixed` result containing the empty key fails before output. Operands and returned keys or suffixes carry raw bytes in both modes; backslashes, tabs, and control bytes have no special encoding. NUL cannot occur in a key. In the default mode, LF ends a record and cannot occur inside a key. The `-0` mode permits LF inside a key. A request without its selected ending delimiter fails. Snapshot files use the selected mode's delimiter as described below. For example:
 
 ```sh
 printf 'insert\tca\ninsert\tcb\nfirstprefixed\tc\nallprefixed\tc\n' | tests/prefix/bin/cbt
 ```
 
-The response is:
-
-```text
-inserted
-inserted
-found	a
-match	a
-match	b
-end
-```
-
-The gaps after `found` and `match` above are tabs.
+The response is `2`, `2`, `found<TAB>a`, `ca`, `cb`, and an empty record, each terminated by LF. The gap after `found` is a tab.
 
 The following command sends a key containing a literal newline and prints the NUL-framed response as hexadecimal bytes:
 
@@ -139,12 +128,11 @@ cat tests/prefix/example.snapshot
 The output from `cbt` followed by `cat` is:
 
 ```text
-inserted
-inserted
+2
+2
 saved
-cleared
 loaded
-present
+1
 A
 B
 ```
