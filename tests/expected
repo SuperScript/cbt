@@ -1,0 +1,16 @@
+
+
+==== critbit0-baseline ====
+
+insert a: 2
+insert b: 2
+insert existing: 1
+contains a: 1
+first prefixed: 1
+first suffix: a
+all prefixed: 1
+suffixes a,b: 1,1
+delete a: 1
+contains a after delete: 0
+contains b after clear: 0
+0

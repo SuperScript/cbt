@@ -1,4 +1,5 @@
 needvars =
+CC := cc
 
 #_# help
 #_#   Display this helpful message
@@ -40,5 +41,5 @@ clean:
 .PHONY: test
 test:
 	@rm -f tests/output
-	@tests/run > tests/output
+	@CC="$(CC)" tests/run > tests/output
 	@diff tests/output tests/expected
