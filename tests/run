@@ -83,6 +83,22 @@ then
 fi
 _check "${basedir}/critbit0_installed"
 
+_run installed-library-command-consistency
+if ! "${CC:-cc}" -I"${home}/tests/prefix/include" \
+  -o "${basedir}/critbit0_cbt" tests/critbit0_cbt.c \
+  -L"${home}/tests/prefix/lib" -lcritbit0 \
+  2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+if ! "${basedir}/critbit0_cbt" > "${basedir}/requests"
+then
+  printf '%s\n' 'installed library request generation failed' >&2
+  exit 1
+fi
+{ "${home}/tests/prefix/bin/cbt" < "${basedir}/requests" 2>&1; echo "$?"; } | _sanitize
+
 _run cbt-retained-state
 _cbt 'insert\talpha' 'contains\talpha' 'insert\talpha' 'contains\tbeta'
 
