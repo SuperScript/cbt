@@ -2,3 +2,4 @@ plans
 tests/output
 tests/basedir
 /jits/
+/venv/
