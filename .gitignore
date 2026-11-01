@@ -1,5 +1,8 @@
 plans
 tests/output
 tests/basedir
+/tests/prefix/
+/*.o
+/libcritbit0.a*
 /jits/
 /venv/

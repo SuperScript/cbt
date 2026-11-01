@@ -6,7 +6,30 @@ LIB_SOURCES := critbit0_contains.c critbit0_insert.c critbit0_delete.c critbit0_
 LIB_OBJECTS := $(LIB_SOURCES:.c=.o)
 PUBLIC_HEADERS := critbit0.h str0.h limitmalloc.h uint32.h uint8.h uint64.h int64.h
 
-include mk/help.mk
+#_# help
+#_#   Display this helpful message
+#_#
+.PHONY: help
+help:
+	@seen=; for m in $(MAKEFILE_LIST) $(.MAKE.MAKEFILES); do \
+	  case "$$m" in (/usr/share/mk/*) continue;; esac; \
+	  case " $$seen " in (*" $$m "*) continue;; esac; \
+	  echo "$$m:" && \
+	  sed -n 's/^#_#/ /p' "$$m"; \
+	  seen="$$seen $$m"; \
+	done
+
+#_# needvar.X
+#_#   Check whether $(X) is nonempty
+#_#   Add X to needvars to enable
+#_#
+_NEEDVAR_TARGETS != for v in $(needvars); do printf 'needvar.%s ' "$$v"; done
+_NEEDVAR_LOOKUP != for v in $(needvars); do printf '%s) val='"'"'$$(%s)'"'"';; ' "$$v" "$$v"; done
+
+$(_NEEDVAR_TARGETS):
+	@v=$@; v=$${v#needvar.}; val=; \
+	  case "$$v" in $(_NEEDVAR_LOOKUP) esac; \
+	  test -n "$$val" || { echo "variable not defined: $$v" >&2; exit 1; }
 
 #_# clean
 #_#   Remove test artifacts
