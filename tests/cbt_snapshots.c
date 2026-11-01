@@ -27,6 +27,12 @@ int main(int argc, char **argv)
       sizeof "valid\nx\0y\n" - 1 || fclose(file) == EOF) return 1;
   pass &= check("invalid load rejected", load_snapshot(argv[1], &tree, &pool) != 0);
   pass &= check("invalid load retains tree", critbit0_contains(&tree, &key));
+  file = fopen(argv[1], "w");
+  if (!file) return 1;
+  if (fwrite("valid\n", 1, 6, file) != 6 || fclose(file) == EOF) return 1;
+  raw_stream = 1;
+  pass &= check("other-mode load rejected", load_snapshot(argv[1], &tree, &pool) != 0);
+  pass &= check("other-mode load retains tree", critbit0_contains(&tree, &key));
   if (chmod(argv[2], 0640) == -1 || stat(argv[2], &before) == -1) return 1;
   pool.limitmalloc_private_limit = pool.limitmalloc_private_allocated;
   pass &= check("failed save rejected", save_snapshot(argv[2], &tree, &pool) != 0);
@@ -44,6 +50,14 @@ int main(int argc, char **argv)
   pass &= check("save retains metadata", stat(argv[2], &after) == 0 &&
                 (after.st_mode & 07777) == 0640 &&
                 after.st_uid == before.st_uid && after.st_gid == before.st_gid);
+  file = fopen(argv[2], "r");
+  if (!file) return 1;
+  pass &= check("NUL save bytes", fread(contents, 1, 9, file) == 9 &&
+                memcmp(contents, "retained\0", 9) == 0 && fgetc(file) == EOF);
+  if (fclose(file) == EOF) return 1;
+  raw_stream = 0;
+  pass &= check("NUL load in LF mode rejected", load_snapshot(argv[2], &tree, &pool) != 0);
+  pass &= check("NUL load in LF mode retains tree", critbit0_contains(&tree, &key));
   critbit0_clear(&tree, &pool);
   return pass ? 0 : 1;
 }

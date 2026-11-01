@@ -36,7 +36,7 @@ static int fail(const char *message)
 static int save_key(void)
 {
   fputs(suffix, snapshot_output);
-  fputc('\n', snapshot_output);
+  fputc(raw_stream ? 0 : '\n', snapshot_output);
   return !ferror(snapshot_output);
 }
 
@@ -49,11 +49,12 @@ static int load_snapshot(const char *path, critbit0_tree *tree,
   size_t capacity = 0;
   ssize_t length;
   int ok = 1;
+  int terminator = raw_stream ? 0 : '\n';
 
   if (!input) return fail("load failed");
-  while ((length = getline(&line, &capacity, input)) != -1) {
+  while ((length = getdelim(&line, &capacity, terminator, input)) != -1) {
     str0 key;
-    if (length == 0 || line[length - 1] != '\n' ||
+    if (length == 0 || line[length - 1] != terminator ||
         memchr(line, 0, (size_t) length - 1)) {
       ok = 0;
       break;

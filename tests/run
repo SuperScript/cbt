@@ -169,10 +169,31 @@ _cbt 'insert\t' 'insert\tB' 'insert\tA' \
   'load\ttests/basedir/snapshot' 'contains\tA' 'contains\tB' 'contains\t'
 cat "${basedir}/snapshot" | _sanitize
 
+_run cbt-nul-snapshot
+{ printf 'insert\tA\nB\000insert\tC\000save\ttests/basedir/nul-snapshot\000clear\000load\ttests/basedir/nul-snapshot\000contains\tA\nB\000contains\tC\000' \
+| "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+_hex < "${basedir}/nul-snapshot"
+
+_run cbt-snapshot-other-mode
+{ printf 'insert\tretained\000load\ttests/basedir/snapshot\000' \
+| "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output" 2> "${basedir}/load-error"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+cat "${basedir}/load-error"
+{ printf 'insert\tretained\nload\ttests/basedir/nul-snapshot\n' \
+| "${home}/tests/prefix/bin/cbt" > "${basedir}/raw-output" 2> "${basedir}/load-error"; echo "$?"; } | _sanitize
+_hex < "${basedir}/raw-output"
+cat "${basedir}/load-error"
+
 _run cbt-snapshot-empty
 : > "${basedir}/empty"
 _cbt 'insert\tx' 'load\ttests/basedir/empty' 'contains\tx' \
   'save\ttests/basedir/empty'
+test ! -s "${basedir}/empty"
+echo "$?"
+{ printf 'insert\tx\000load\ttests/basedir/empty\000contains\tx\000save\ttests/basedir/empty\000' \
+| "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
 test ! -s "${basedir}/empty"
 echo "$?"
 
