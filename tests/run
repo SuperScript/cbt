@@ -1,0 +1,36 @@
+#!/bin/sh
+
+home="$(pwd)"
+basedir="${home}/tests/basedir"
+
+####
+
+_sanitize() {
+  sed \
+    -e "s!${basedir}!...!g" \
+    -e "s!${home}!...!g"
+}
+
+_check() {
+  { "$@" 2>&1; echo $?; } | _sanitize
+}
+
+_check_err() {
+  { "$@" 2>&1; echo $?; } | grep -E 'fatal:|^[0-9]+' | _sanitize
+}
+
+_run() {
+  printf '\n\n==== %s ====\n\n'  "$1"
+}
+
+_json() {
+  jq -r "$@" | _sanitize
+}
+
+####
+
+rm -rf "${basedir:?}/"*
+rmdir "${basedir}" 2>/dev/null; true
+
+####
+
