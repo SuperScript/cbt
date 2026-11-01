@@ -14,3 +14,35 @@ delete a: 1
 contains a after delete: 0
 contains b after clear: 0
 0
+
+
+==== critbit0-operations ====
+
+empty membership: yes
+empty delete: yes
+empty first: yes
+empty all: yes
+empty clear: yes
+insert new: yes
+insert existing: yes
+insert branch: yes
+membership present: yes
+membership missing: yes
+first suffix: yes
+first missing: yes
+first longer prefix: yes
+all suffixes: yes
+all early stop: yes
+all null callback: yes
+all missing: yes
+all longer prefix: yes
+seed prior suffix: yes
+insert allocation failure: yes
+existing with full pool: yes
+first allocation failure: yes
+all allocation failure: yes
+delete missing: yes
+delete existing: yes
+remaining key: yes
+clear releases: yes
+0

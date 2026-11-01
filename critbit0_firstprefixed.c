@@ -36,7 +36,7 @@ int critbit0_firstprefixed(critbit0_tree *t,limitmalloc_pool *pool,str0 *result,
   }
 
   for (i = 0;i < ulen;++i)
-    if (p[i] != ubytes[i])
+    if (!p[i] || p[i] != ubytes[i])
       return 0;
 
   return str0_copyc(result,pool,(const char *) (p + ulen));

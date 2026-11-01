@@ -62,7 +62,7 @@ int critbit0_allprefixed(critbit0_tree *t,limitmalloc_pool *pool,str0 *result,st
   }
 
   for (i = 0;i < ulen;++i)
-    if (p[i] != ubytes[i])
+    if (!p[i] || p[i] != ubytes[i])
       return 1;
 
   return traverse(top,pool,result,handle,ulen);

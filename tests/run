@@ -49,3 +49,17 @@ then
   exit 1
 fi
 _check "${basedir}/critbit0_baseline"
+
+_run critbit0-operations
+if ! "${CC:-cc}" -I. -o "${basedir}/critbit0_operations" \
+  tests/critbit0_operations.c \
+  critbit0_contains.c critbit0_insert.c critbit0_delete.c \
+  critbit0_clear.c critbit0_firstprefixed.c critbit0_allprefixed.c \
+  str0_length.c str0_equalc.c str0_copyc.c str0_free.c \
+  limitmalloc_open.c limitmalloc_open_if2.c limitmalloc_close.c \
+  2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/critbit0_operations"
