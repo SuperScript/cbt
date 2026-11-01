@@ -23,7 +23,8 @@ int main(int argc, char **argv)
   if (critbit0_insert(&tree, &pool, &key) != 2) return 1;
   file = fopen(argv[1], "w");
   if (!file) return 1;
-  if (fputs("valid\n\\x00\n", file) == EOF || fclose(file) == EOF) return 1;
+  if (fwrite("valid\nx\0y\n", 1, sizeof "valid\nx\0y\n" - 1, file) !=
+      sizeof "valid\nx\0y\n" - 1 || fclose(file) == EOF) return 1;
   pass &= check("invalid load rejected", load_snapshot(argv[1], &tree, &pool) != 0);
   pass &= check("invalid load retains tree", critbit0_contains(&tree, &key));
   if (chmod(argv[2], 0640) == -1 || stat(argv[2], &before) == -1) return 1;

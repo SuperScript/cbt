@@ -35,6 +35,11 @@ _cbt_installed() {
   { printf '%s\n' "$@" | sed 's/\\t/	/' | "${home}/tests/prefix/bin/cbt" 2>&1; echo "$?"; } | _sanitize
 }
 
+_hex() {
+  od -An -tx1 | tr -d ' \n'
+  printf '\n'
+}
+
 ####
 
 rm -rf "${basedir:?}/"*
@@ -117,28 +122,24 @@ _cbt 'allprefixed\tz' 'insert\tab' 'insert\tac' 'allprefixed\ta'
 _run cbt-empty-key
 _cbt 'insert\t' 'contains\t' 'firstprefixed\t' 'allprefixed\t'
 
-_run cbt-escaped-bytes
-_cbt 'insert\tA\\\t\n\r\x01\x80' 'contains\tA\\\t\n\r\x01\x80' 'firstprefixed\tA' 'allprefixed\tA'
+_run cbt-raw-lf-bytes
+{ printf 'insert\tA\\\t\001\177\ncontains\tA\\\t\001\177\nfirstprefixed\tA\nallprefixed\tA\n' \
+| "${home}/tests/prefix/bin/cbt" > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/raw-output"
+
+_run cbt-literal-old-escapes
+{ printf 'insert\tA\\n\\x41\nfirstprefixed\tA\n' \
+| "${home}/tests/prefix/bin/cbt" > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/raw-output"
 
 _run cbt-invalid-verb
 _cbt 'unknown\tx' 'insert\tx'
 
-_run cbt-invalid-escape
-_cbt 'insert\t\q' 'contains\tx'
-
 _run cbt-invalid-nul
-_cbt 'insert\t\x00' 'contains\tx'
+{ printf 'insert\tx\000y\n' | "${home}/tests/prefix/bin/cbt" 2>&1; echo "$?"; } | _sanitize
 
-_run cbt-invalid-hex
-_cbt 'insert\t\x41' 'contains\tx'
-
-_run cbt-invalid-control
-{ printf 'insert\tx\001\ncontains\tx\n' | ./cbt 2>&1; echo "$?"; } | _sanitize
-
-_hex() {
-  od -An -tx1 | tr -d ' \n'
-  printf '\n'
-}
+_run cbt-lf-boundary
+{ printf 'insert\tx\ny\n' | "${home}/tests/prefix/bin/cbt" 2>&1; echo "$?"; } | _sanitize
 
 _run cbt-unterminated
 { printf 'insert\tx' | ./cbt 2>&1; echo "$?"; } | _sanitize
@@ -176,8 +177,18 @@ test ! -s "${basedir}/empty"
 echo "$?"
 
 _run cbt-snapshot-invalid
-printf 'valid\n\\x00\n' > "${basedir}/invalid"
+printf 'valid\nx\000y\n' > "${basedir}/invalid"
 _cbt_installed 'insert\tx' 'load\ttests/basedir/invalid' 'contains\tx'
+
+_run cbt-snapshot-lf-boundary
+printf 'valid\nunterminated' > "${basedir}/invalid"
+_cbt_installed 'insert\tx' 'load\ttests/basedir/invalid' 'contains\tx'
+
+_run cbt-snapshot-raw-bytes
+{ printf 'insert\tA\\\t\001\177\ninsert\tA\\n\\x41\nsave\ttests/basedir/raw-snapshot\nclear\nload\ttests/basedir/raw-snapshot\ncontains\tA\\\t\001\177\ncontains\tA\\n\\x41\n' \
+| "${home}/tests/prefix/bin/cbt" > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/raw-output"
+_hex < "${basedir}/raw-snapshot"
 
 _run cbt-snapshot-missing
 _cbt_installed 'insert\tx' 'load\ttests/basedir/missing'
@@ -192,12 +203,7 @@ _run cbt-installed-all-bytes
 awk 'BEGIN {
   key = ""
   for (i = 1; i < 256; i++) {
-    if (i == 9) key = key "\\t"
-    else if (i == 10) key = key "\\n"
-    else if (i == 13) key = key "\\r"
-    else if (i == 92) key = key "\\\\"
-    else if (i >= 32 && i <= 126) key = key sprintf("%c", i)
-    else key = key sprintf("\\x%02X", i)
+    if (i != 10) key = key sprintf("%c", i)
   }
   printf "insert\t%s\nsave\ttests/basedir/all-bytes\nclear\nload\ttests/basedir/all-bytes\ncontains\t%s\n", key, key
 }' | "${home}/tests/prefix/bin/cbt" 2>&1 | _sanitize

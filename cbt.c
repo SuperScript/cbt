@@ -13,8 +13,6 @@ static int output_failed;
 static FILE *snapshot_output;
 static int raw_stream;
 
-static void encode(FILE *output, const char *s);
-
 static void response(const char *message)
 {
   fputs(message, stdout);
@@ -25,8 +23,7 @@ static void response_suffix(const char *tag, const char *value)
 {
   fputs(tag, stdout);
   putchar('\t');
-  if (raw_stream) fputs(value, stdout);
-  else encode(stdout, value);
+  fputs(value, stdout);
   putchar(raw_stream ? 0 : '\n');
 }
 
@@ -36,72 +33,9 @@ static int fail(const char *message)
   return 1;
 }
 
-static int hex_digit(unsigned char c)
-{
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
-
-static int decode(char *s)
-{
-  char *in = s;
-  char *out = s;
-  unsigned char c;
-  int high;
-  int low;
-
-  while ((c = (unsigned char) *in++) != 0) {
-    if (c == '\\') {
-      c = (unsigned char) *in++;
-      switch (c) {
-        case '\\': c = '\\'; break;
-        case 't': c = '\t'; break;
-        case 'n': c = '\n'; break;
-        case 'r': c = '\r'; break;
-        case 'x':
-          high = hex_digit((unsigned char) in[0]);
-          if (high < 0 || in[0] == 0) return 0;
-          low = hex_digit((unsigned char) in[1]);
-          if (low < 0 || in[1] == 0) return 0;
-          c = (unsigned char) ((high << 4) | low);
-          in += 2;
-          if (c == 0 || c == '\t' || c == '\n' || c == '\r' ||
-              c == '\\' || (c >= 0x20 && c <= 0x7e)) return 0;
-          break;
-        default: return 0;
-      }
-    } else if (c < 0x20 || c > 0x7e) {
-      return 0;
-    }
-    *out++ = (char) c;
-  }
-  *out = 0;
-  return 1;
-}
-
-static void encode(FILE *output, const char *s)
-{
-  static const char hex[] = "0123456789ABCDEF";
-  const unsigned char *p = (const unsigned char *) s;
-  unsigned char c;
-
-  while ((c = *p++) != 0) {
-    if (c == '\\') fputs("\\\\", output);
-    else if (c == '\t') fputs("\\t", output);
-    else if (c == '\n') fputs("\\n", output);
-    else if (c == '\r') fputs("\\r", output);
-    else if (c < 0x20 || c > 0x7e) {
-      fputs("\\x", output);
-      fputc(hex[c >> 4], output);
-      fputc(hex[c & 15], output);
-    } else fputc(c, output);
-  }
-}
-
 static int save_key(void)
 {
-  encode(snapshot_output, suffix);
+  fputs(suffix, snapshot_output);
   fputc('\n', snapshot_output);
   return !ferror(snapshot_output);
 }
@@ -125,10 +59,6 @@ static int load_snapshot(const char *path, critbit0_tree *tree,
       break;
     }
     line[length - 1] = 0;
-    if (!decode(line)) {
-      ok = 0;
-      break;
-    }
     key = line;
     if (!critbit0_insert(&replacement, pool, &key)) {
       ok = 0;
@@ -239,7 +169,6 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
     return 0;
   }
   *tab++ = 0;
-  if (!raw_stream && !decode(tab)) return fail("invalid operand");
   key = tab;
   if (strcmp(line, "load") == 0) {
     return load_snapshot(key, tree, pool);

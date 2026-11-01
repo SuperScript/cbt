@@ -123,14 +123,16 @@ end
 0
 
 
-==== cbt-escaped-bytes ====
+==== cbt-raw-lf-bytes ====
 
-inserted
-present
-found	\\\t\n\r\x01\x80
-match	\\\t\n\r\x01\x80
-end
 0
+696e7365727465640a70726573656e740a666f756e64095c09017f0a6d61746368095c09017f0a656e640a
+
+
+==== cbt-literal-old-escapes ====
+
+0
+696e7365727465640a666f756e64095c6e5c7834310a
 
 
 ==== cbt-invalid-verb ====
@@ -139,27 +141,16 @@ cbt: invalid request
 1
 
 
-==== cbt-invalid-escape ====
-
-cbt: invalid operand
-1
-
-
 ==== cbt-invalid-nul ====
 
-cbt: invalid operand
+cbt: invalid request
 1
 
 
-==== cbt-invalid-hex ====
+==== cbt-lf-boundary ====
 
-cbt: invalid operand
-1
-
-
-==== cbt-invalid-control ====
-
-cbt: invalid operand
+cbt: invalid request
+inserted
 1
 
 
@@ -225,6 +216,20 @@ saved
 cbt: load failed
 inserted
 1
+
+
+==== cbt-snapshot-lf-boundary ====
+
+cbt: load failed
+inserted
+1
+
+
+==== cbt-snapshot-raw-bytes ====
+
+0
+696e7365727465640a696e7365727465640a73617665640a636c65617265640a6c6f616465640a70726573656e740a70726573656e740a
+415c09017f0a415c6e5c7834310a
 
 
 ==== cbt-snapshot-missing ====

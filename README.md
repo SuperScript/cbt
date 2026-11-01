@@ -100,7 +100,7 @@ The installed `tests/prefix/bin/cbt` reads requests from standard input and writ
 | `load` | `loaded` |
 | `save` | `saved` |
 
-In the default LF mode, the operand and returned suffix use printable ASCII directly, except backslash (`\\`), tab (`\t`), newline (`\n`), and carriage return (`\r`) use those escapes. Encode other bytes as `\xHH` with uppercase hex digits. NUL (`\x00`), invalid escapes, and unescaped control bytes are rejected. In `-0` mode, operands and suffixes contain raw non-NUL bytes; backslashes have no special meaning. A request without its ending NUL fails. Snapshot files still use the LF format described below. For example:
+Operands and returned suffixes carry raw bytes in both modes; backslashes, tabs, and control bytes have no special encoding. NUL cannot occur in a key. In the default mode, LF ends a record and cannot occur inside a key. The `-0` mode permits LF inside a key. A request without its selected ending delimiter fails. Snapshot files still use the LF format described below. For example:
 
 ```sh
 printf 'insert\tca\ninsert\tcb\nfirstprefixed\tc\nallprefixed\tc\n' | tests/prefix/bin/cbt
@@ -127,7 +127,7 @@ printf 'insert\tA\nB\000firstprefixed\tA\000' | tests/prefix/bin/cbt -0 | od -An
 
 ## Snapshots
 
-A snapshot contains one escaped key per line, sorted by decoded byte order. A blank line represents the empty key; an empty file represents an empty tree. Saving is explicit, so changes in memory are not durable until `save` succeeds. A successful `load` replaces the current tree; an unsuccessful load leaves it intact. Saving atomically replaces the destination, preserves an existing regular file's mode and ownership, refuses a symlink, and leaves the prior file intact on failure.
+A snapshot contains one raw key per LF-terminated line, sorted by byte order. NUL and LF cannot occur inside a key. Backslashes and old escape text are literal bytes. A blank line represents the empty key; an empty file represents an empty tree. Saving is explicit, so changes in memory are not durable until `save` succeeds. A successful `load` replaces the current tree; an unsuccessful load leaves it intact. Saving atomically replaces the destination, preserves an existing regular file's mode and ownership, refuses a symlink, and leaves the prior file intact on failure.
 
 This example uses a temporary snapshot path under `tests/prefix`:
 
