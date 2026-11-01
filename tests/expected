@@ -57,3 +57,106 @@ installed all: yes
 installed delete: yes
 installed clear: yes
 0
+
+
+==== cbt-retained-state ====
+
+inserted
+present
+exists
+absent
+0
+
+
+==== cbt-delete ====
+
+missing
+inserted
+deleted
+absent
+0
+
+
+==== cbt-clear ====
+
+inserted
+cleared
+absent
+cleared
+0
+
+
+==== cbt-firstprefixed ====
+
+notfound
+inserted
+found	b
+notfound
+0
+
+
+==== cbt-allprefixed ====
+
+end
+inserted
+inserted
+match	b
+match	c
+end
+0
+
+
+==== cbt-empty-key ====
+
+inserted
+present
+found	
+match	
+end
+0
+
+
+==== cbt-escaped-bytes ====
+
+inserted
+present
+found	\\\t\n\r\x01\x80
+match	\\\t\n\r\x01\x80
+end
+0
+
+
+==== cbt-invalid-verb ====
+
+cbt: invalid request
+1
+
+
+==== cbt-invalid-escape ====
+
+cbt: invalid operand
+1
+
+
+==== cbt-invalid-nul ====
+
+cbt: invalid operand
+1
+
+
+==== cbt-invalid-hex ====
+
+cbt: invalid operand
+1
+
+
+==== cbt-invalid-control ====
+
+cbt: invalid operand
+1
+
+
+==== cbt-unterminated ====
+
+cbt: unterminated request
+1

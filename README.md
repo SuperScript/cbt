@@ -18,7 +18,7 @@ Run `make install PREFIX=/path/to/prefix` to install `libcritbit0.a` in `PREFIX/
 
 ## Daily use
 
-Call the library from a program or use the command-line tools.
+Call the library from a program, or run `./cbt` and send tab-separated requests, one per line. For example, `printf 'insert\talpha\ncontains\talpha\n' | ./cbt` prints `inserted` and then `present`. The process retains its tree across requests.
 
 ## Imported source
 

@@ -44,7 +44,7 @@ clean:
 #_#   Run test suite and diff with expected results
 #_#
 .PHONY: test
-test:
+test: cbt
 	@rm -f tests/output
 	@CC="$(CC)" tests/run > tests/output
 	@diff tests/output tests/expected
@@ -63,6 +63,11 @@ libcritbit0.a: $(LIB_OBJECTS)
 	  $(AR) rcs "$$temp/libcritbit0.a" $(LIB_OBJECTS) && \
 	  mv "$$temp/libcritbit0.a" "$@" && \
 	  rmdir "$$temp"
+
+cbt: cbt.c libcritbit0.a
+	@temp="$$(mktemp "$@.XXXXXX")" && \
+	  $(CC) -I. -o "$$temp" cbt.c libcritbit0.a && \
+	  mv "$$temp" "$@"
 
 .SUFFIXES: .c .o
 .c.o:

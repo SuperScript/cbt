@@ -27,6 +27,10 @@ _json() {
   jq -r "$@" | _sanitize
 }
 
+_cbt() {
+  { printf '%s\n' "$@" | sed 's/\\t/	/' | ./cbt 2>&1; echo "$?"; } | _sanitize
+}
+
 ####
 
 rm -rf "${basedir:?}/"*
@@ -74,3 +78,42 @@ then
   exit 1
 fi
 _check "${basedir}/critbit0_installed"
+
+_run cbt-retained-state
+_cbt 'insert\talpha' 'contains\talpha' 'insert\talpha' 'contains\tbeta'
+
+_run cbt-delete
+_cbt 'delete\tx' 'insert\tx' 'delete\tx' 'contains\tx'
+
+_run cbt-clear
+_cbt 'insert\tx' 'clear' 'contains\tx' 'clear'
+
+_run cbt-firstprefixed
+_cbt 'firstprefixed\ta' 'insert\tab' 'firstprefixed\ta' 'firstprefixed\tz'
+
+_run cbt-allprefixed
+_cbt 'allprefixed\tz' 'insert\tab' 'insert\tac' 'allprefixed\ta'
+
+_run cbt-empty-key
+_cbt 'insert\t' 'contains\t' 'firstprefixed\t' 'allprefixed\t'
+
+_run cbt-escaped-bytes
+_cbt 'insert\tA\\\t\n\r\x01\x80' 'contains\tA\\\t\n\r\x01\x80' 'firstprefixed\tA' 'allprefixed\tA'
+
+_run cbt-invalid-verb
+_cbt 'unknown\tx' 'insert\tx'
+
+_run cbt-invalid-escape
+_cbt 'insert\t\q' 'contains\tx'
+
+_run cbt-invalid-nul
+_cbt 'insert\t\x00' 'contains\tx'
+
+_run cbt-invalid-hex
+_cbt 'insert\t\x41' 'contains\tx'
+
+_run cbt-invalid-control
+{ printf 'insert\tx\001\ncontains\tx\n' | ./cbt 2>&1; echo "$?"; } | _sanitize
+
+_run cbt-unterminated
+{ printf 'insert\tx' | ./cbt 2>&1; echo "$?"; } | _sanitize
