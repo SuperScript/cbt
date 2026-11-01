@@ -3,6 +3,7 @@ tests/output
 tests/basedir
 /tests/prefix/
 /*.o
+/cbt
 /libcritbit0.a*
 /jits/
 /venv/
