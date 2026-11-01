@@ -160,3 +160,81 @@ cbt: invalid operand
 
 cbt: unterminated request
 1
+
+
+==== cbt-snapshot-roundtrip ====
+
+inserted
+inserted
+inserted
+saved
+cleared
+loaded
+present
+present
+present
+0
+
+A
+B
+
+
+==== cbt-snapshot-empty ====
+
+inserted
+loaded
+absent
+saved
+0
+0
+
+
+==== cbt-snapshot-invalid ====
+
+cbt: load failed
+inserted
+1
+
+
+==== cbt-snapshot-missing ====
+
+cbt: load failed
+inserted
+1
+
+
+==== cbt-snapshot-save-symlink ====
+
+cbt: save failed
+inserted
+1
+prior
+
+
+==== cbt-installed-all-bytes ====
+
+inserted
+saved
+cleared
+loaded
+present
+
+
+==== cbt-installed-executable ====
+
+0
+
+
+==== cbt-snapshot-rollback ====
+
+cbt: load failed
+cbt: save failed
+invalid load rejected: yes
+invalid load retains tree: yes
+failed save rejected: yes
+failed save retains file: yes
+failed save retains content: yes
+saved
+save succeeds: yes
+save retains metadata: yes
+0

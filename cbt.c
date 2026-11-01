@@ -1,6 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +10,7 @@
 
 static str0 suffix;
 static int output_failed;
+static FILE *snapshot_output;
 
 static int fail(const char *message)
 {
@@ -59,29 +62,146 @@ static int decode(char *s)
   return 1;
 }
 
-static void encode(const char *s)
+static void encode(FILE *output, const char *s)
 {
   static const char hex[] = "0123456789ABCDEF";
   const unsigned char *p = (const unsigned char *) s;
   unsigned char c;
 
   while ((c = *p++) != 0) {
-    if (c == '\\') fputs("\\\\", stdout);
-    else if (c == '\t') fputs("\\t", stdout);
-    else if (c == '\n') fputs("\\n", stdout);
-    else if (c == '\r') fputs("\\r", stdout);
+    if (c == '\\') fputs("\\\\", output);
+    else if (c == '\t') fputs("\\t", output);
+    else if (c == '\n') fputs("\\n", output);
+    else if (c == '\r') fputs("\\r", output);
     else if (c < 0x20 || c > 0x7e) {
-      fputs("\\x", stdout);
-      putchar(hex[c >> 4]);
-      putchar(hex[c & 15]);
-    } else putchar(c);
+      fputs("\\x", output);
+      fputc(hex[c >> 4], output);
+      fputc(hex[c & 15], output);
+    } else fputc(c, output);
   }
+}
+
+static int save_key(void)
+{
+  encode(snapshot_output, suffix);
+  fputc('\n', snapshot_output);
+  return !ferror(snapshot_output);
+}
+
+static int load_snapshot(const char *path, critbit0_tree *tree,
+                         limitmalloc_pool *pool)
+{
+  critbit0_tree replacement = { 0 };
+  FILE *input = fopen(path, "r");
+  char *line = 0;
+  size_t capacity = 0;
+  ssize_t length;
+  int ok = 1;
+
+  if (!input) return fail("load failed");
+  while ((length = getline(&line, &capacity, input)) != -1) {
+    str0 key;
+    if (length == 0 || line[length - 1] != '\n' ||
+        memchr(line, 0, (size_t) length - 1)) {
+      ok = 0;
+      break;
+    }
+    line[length - 1] = 0;
+    if (!decode(line)) {
+      ok = 0;
+      break;
+    }
+    key = line;
+    if (!critbit0_insert(&replacement, pool, &key)) {
+      ok = 0;
+      break;
+    }
+  }
+  if (ferror(input)) ok = 0;
+  if (fclose(input) == EOF) ok = 0;
+  free(line);
+  if (!ok) {
+    critbit0_clear(&replacement, pool);
+    return fail("load failed");
+  }
+  critbit0_clear(tree, pool);
+  *tree = replacement;
+  puts("loaded");
+  return 0;
+}
+
+static int save_snapshot(const char *path, critbit0_tree *tree,
+                         limitmalloc_pool *pool)
+{
+  struct stat prior;
+  mode_t mode;
+  mode_t mask;
+  int existed = 1;
+  char *temporary;
+  size_t length = strlen(path);
+  int fd;
+  FILE *output;
+  str0 prefix = "";
+  int result;
+  int ok = 1;
+
+  if (lstat(path, &prior) == -1) {
+    if (errno != ENOENT) return fail("save failed");
+    existed = 0;
+  } else if (!S_ISREG(prior.st_mode)) {
+    return fail("save failed");
+  }
+  if (length > (size_t) -1 - 8) return fail("save failed");
+  temporary = malloc(length + 8);
+  if (!temporary) return fail("save failed");
+  memcpy(temporary, path, length);
+  memcpy(temporary + length, ".XXXXXX", 8);
+  fd = mkstemp(temporary);
+  if (fd == -1) {
+    free(temporary);
+    return fail("save failed");
+  }
+  if (existed) {
+    mode = prior.st_mode & 07777;
+    if (fchown(fd, prior.st_uid, prior.st_gid) == -1) ok = 0;
+  } else {
+    mask = umask(0);
+    umask(mask);
+    mode = 0666 & ~mask;
+  }
+  if (ok && fchmod(fd, mode) == -1) ok = 0;
+  output = fdopen(fd, "w");
+  if (!output) {
+    close(fd);
+    ok = 0;
+  }
+  if (ok) {
+    snapshot_output = output;
+    result = critbit0_allprefixed(tree, pool, &suffix, &prefix, save_key);
+    str0_free(&suffix, pool);
+    if (result != 1 || ferror(output)) ok = 0;
+  }
+  if (output && fclose(output) == EOF) ok = 0;
+  if (ok) {
+    struct stat current;
+    if (existed) {
+      if (lstat(path, &current) == -1 || !S_ISREG(current.st_mode)) ok = 0;
+    } else if (lstat(path, &current) != -1 || errno != ENOENT) {
+      ok = 0;
+    }
+  }
+  if (ok && rename(temporary, path) == -1) ok = 0;
+  if (!ok) unlink(temporary);
+  free(temporary);
+  if (!ok) return fail("save failed");
+  puts("saved");
+  return 0;
 }
 
 static int match(void)
 {
   fputs("match\t", stdout);
-  encode(suffix);
+  encode(stdout, suffix);
   putchar('\n');
   if (ferror(stdout)) {
     output_failed = 1;
@@ -105,7 +225,11 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
   *tab++ = 0;
   if (!decode(tab)) return fail("invalid operand");
   key = tab;
-  if (strcmp(line, "contains") == 0) {
+  if (strcmp(line, "load") == 0) {
+    return load_snapshot(key, tree, pool);
+  } else if (strcmp(line, "save") == 0) {
+    return save_snapshot(key, tree, pool);
+  } else if (strcmp(line, "contains") == 0) {
     puts(critbit0_contains(tree, &key) ? "present" : "absent");
   } else if (strcmp(line, "insert") == 0) {
     result = critbit0_insert(tree, pool, &key);
@@ -119,7 +243,7 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
     if (!result && errno) return fail("prefix lookup failed");
     if (result) {
       fputs("found\t", stdout);
-      encode(suffix);
+      encode(stdout, suffix);
       putchar('\n');
       str0_free(&suffix, pool);
     } else puts("notfound");

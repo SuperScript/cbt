@@ -31,6 +31,10 @@ _cbt() {
   { printf '%s\n' "$@" | sed 's/\\t/	/' | ./cbt 2>&1; echo "$?"; } | _sanitize
 }
 
+_cbt_installed() {
+  { printf '%s\n' "$@" | sed 's/\\t/	/' | "${home}/tests/prefix/bin/cbt" 2>&1; echo "$?"; } | _sanitize
+}
+
 ####
 
 rm -rf "${basedir:?}/"*
@@ -117,3 +121,57 @@ _run cbt-invalid-control
 
 _run cbt-unterminated
 { printf 'insert\tx' | ./cbt 2>&1; echo "$?"; } | _sanitize
+
+_run cbt-snapshot-roundtrip
+_cbt 'insert\t' 'insert\tB' 'insert\tA' \
+  'save\ttests/basedir/snapshot' 'clear' \
+  'load\ttests/basedir/snapshot' 'contains\tA' 'contains\tB' 'contains\t'
+cat "${basedir}/snapshot" | _sanitize
+
+_run cbt-snapshot-empty
+: > "${basedir}/empty"
+_cbt 'insert\tx' 'load\ttests/basedir/empty' 'contains\tx' \
+  'save\ttests/basedir/empty'
+test ! -s "${basedir}/empty"
+echo "$?"
+
+_run cbt-snapshot-invalid
+printf 'valid\n\\x00\n' > "${basedir}/invalid"
+_cbt_installed 'insert\tx' 'load\ttests/basedir/invalid' 'contains\tx'
+
+_run cbt-snapshot-missing
+_cbt_installed 'insert\tx' 'load\ttests/basedir/missing'
+
+_run cbt-snapshot-save-symlink
+printf 'prior\n' > "${basedir}/prior"
+ln -s prior "${basedir}/link"
+_cbt_installed 'insert\tx' 'save\ttests/basedir/link'
+cat "${basedir}/prior"
+
+_run cbt-installed-all-bytes
+awk 'BEGIN {
+  key = ""
+  for (i = 1; i < 256; i++) {
+    if (i == 9) key = key "\\t"
+    else if (i == 10) key = key "\\n"
+    else if (i == 13) key = key "\\r"
+    else if (i == 92) key = key "\\\\"
+    else if (i >= 32 && i <= 126) key = key sprintf("%c", i)
+    else key = key sprintf("\\x%02X", i)
+  }
+  printf "insert\t%s\nsave\ttests/basedir/all-bytes\nclear\nload\ttests/basedir/all-bytes\ncontains\t%s\n", key, key
+}' | "${home}/tests/prefix/bin/cbt" 2>&1 | _sanitize
+
+_run cbt-installed-executable
+test -x "${home}/tests/prefix/bin/cbt"
+echo "$?"
+
+_run cbt-snapshot-rollback
+printf 'prior\n' > "${basedir}/rollback"
+if ! "${CC:-cc}" -I. -o "${basedir}/cbt_snapshots" \
+  tests/cbt_snapshots.c libcritbit0.a 2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/cbt_snapshots" "${basedir}/bad-load" "${basedir}/rollback"

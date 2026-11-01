@@ -14,11 +14,11 @@ Anyone who needs crit-bit trees can use the library from a program or run its co
 
 ## Installation
 
-Run `make install PREFIX=/path/to/prefix` to install `libcritbit0.a` in `PREFIX/lib` and the public headers in `PREFIX/include`.
+Run `make install PREFIX=/path/to/prefix` to install `libcritbit0.a` in `PREFIX/lib`, the public headers in `PREFIX/include`, and `cbt` in `PREFIX/bin`.
 
 ## Daily use
 
-Call the library from a program, or run `./cbt` and send tab-separated requests, one per line. For example, `printf 'insert\talpha\ncontains\talpha\n' | ./cbt` prints `inserted` and then `present`. The process retains its tree across requests.
+Call the library from a program, or run `./cbt` and send tab-separated requests, one per line. For example, `printf 'insert\talpha\ncontains\talpha\n' | ./cbt` prints `inserted` and then `present`. The process retains its tree across requests. Send `load\t/path/to/snapshot` to replace the tree from a snapshot, or `save\t/path/to/snapshot` to write it. A snapshot has one escaped key per line; saving is explicit.
 
 ## Imported source
 

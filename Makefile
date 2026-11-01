@@ -45,16 +45,18 @@ clean:
 #_#
 .PHONY: test
 test: cbt
+	@$(MAKE) install PREFIX=tests/prefix
 	@rm -f tests/output
 	@CC="$(CC)" tests/run > tests/output
 	@diff tests/output tests/expected
 
 #_# install
-#_#   Install the static library and public headers under PREFIX
+#_#   Install the static library, public headers, and cbt under PREFIX
 #_#
 .PHONY: install
-install: libcritbit0.a
-	@mkdir -p "$(PREFIX)/lib" "$(PREFIX)/include"
+install: libcritbit0.a cbt
+	@mkdir -p "$(PREFIX)/lib" "$(PREFIX)/include" "$(PREFIX)/bin"
+	@cp cbt "$(PREFIX)/bin/cbt"
 	@cp libcritbit0.a "$(PREFIX)/lib/libcritbit0.a"
 	@for header in $(PUBLIC_HEADERS); do cp "$$header" "$(PREFIX)/include/$$header" || exit 1; done
 
