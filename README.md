@@ -87,43 +87,43 @@ deleted ca: 1
 
 ## Command stream
 
-The installed `tests/prefix/bin/cbt` reads requests from standard input and writes results to standard output. By default, each record ends with LF. The `-0` option uses NUL. A request has a verb, a tab, and an operand; `clear` has no operand. The first tab separates the verb from the operand. An empty operand is a valid empty key. One process keeps its tree across requests. Errors go to standard error and stop the process.
+The installed `tests/prefix/bin/cbt` reads requests from standard input and writes results to standard output. By default, each record ends with LF. The `-0` option uses NUL. A request is a command, a space, and its data. `clear`, `read`, and `write` have no data and no space. The first space separates the command from its data, and later spaces stay in the data. An empty operand is a space with nothing after it. One process keeps its tree across requests. Errors go to standard error and stop the process.
 
 | Request | Response |
 | --- | --- |
-| `contains` | `1` if present, `0` if absent |
-| `insert` | `2` if added, `1` if present, `0` on allocation failure |
-| `delete` | `1` if deleted, `0` if absent |
+| `has <key>` | `1` if present, `0` if absent |
+| `add <key>` | `2` if added, `1` if present, `0` on allocation failure |
+| `rm <key>` | `1` if deleted, `0` if absent |
 | `clear` | No output |
-| `firstprefixed` | `found<TAB>suffix` or `notfound` |
-| `allprefixed` | Zero or more bare full keys, then an empty record |
-| `load` | No output |
-| `save` | No output |
-| `read` | No output |
+| `after <prefix>` | The suffix when a match exists; no output when it does not |
+| `list <prefix>` | Zero or more bare full keys, then an empty record |
+| `load <path>` | No output. Reads the `list` output format |
+| `save <path>` | No output. Writes the `list` output format |
+| `read` | No output. Reads the `list` output format |
 | `write` | Sorted keys, then an empty record |
 
-An `allprefixed` result containing the empty key fails before output. Operands and returned keys or suffixes carry raw bytes in both modes; backslashes, tabs, and control bytes have no special encoding. NUL cannot occur in a key. In the default mode, LF ends a record and cannot occur inside a key. The `-0` mode permits LF inside a key. A request without its selected ending delimiter fails. Snapshot files use the selected mode's delimiter as described below. For example:
+A `list` result containing the empty key fails before output. An empty `after` result is an empty record. An `after` allocation failure reports on standard error and exits nonzero. Operands and returned keys or suffixes carry raw bytes in both modes; backslashes, tabs, and control bytes have no special encoding. NUL cannot occur in a key. In the default mode, LF ends a record and cannot occur inside a key. The `-0` mode permits LF inside a key. A request without its selected ending delimiter fails. Snapshot files use the selected mode's delimiter as described below. For example:
 
 ```sh
-printf 'insert\tca\ninsert\tcb\nfirstprefixed\tc\nallprefixed\tc\n' | tests/prefix/bin/cbt
+printf 'add ca\nadd cb\nafter c\nlist c\n' | tests/prefix/bin/cbt
 ```
 
-The response is `2`, `2`, `found<TAB>a`, `ca`, `cb`, and an empty record, each terminated by LF. The gap after `found` is a tab.
+The response is `2`, `2`, `a`, `ca`, `cb`, and an empty record, each terminated by LF.
 
 The following command sends a key containing a literal newline and prints the NUL-framed response as hexadecimal bytes:
 
 ```sh
-printf 'insert\tA\nB\000firstprefixed\tA\000' | tests/prefix/bin/cbt -0 | od -An -tx1
+printf 'add A\nB\000after A\000' | tests/prefix/bin/cbt -0 | od -An -tx1
 ```
 
 ## Snapshots
 
-A snapshot contains raw keys sorted by byte order, followed by one empty record. In default mode, LF ends each key; in `-0` mode, NUL ends each key and LF may occur inside it. NUL cannot occur inside a key in either mode. Backslashes and old escape text are literal bytes. The empty record marks the end of the snapshot. An empty snapshot is that marker alone. A file load rejects a missing marker, bytes after the marker, or an empty file. Operand-free `read` and `write` use the same marker. `read` replaces the tree only after a valid marker, and later commands then run. `write` emits the sorted keys and one marker. `write` and `save` fail before emitting or replacing data when the tree holds the empty key. A nonempty snapshot using the other delimiter is rejected. Saving is explicit, so changes in memory are not durable until `save` succeeds. A successful `load` or `read` replaces the current tree; an unsuccessful one leaves it intact. Saving atomically replaces the destination, preserves an existing regular file's mode and ownership, refuses a symlink, and leaves the prior file intact on failure.
+A snapshot has the same format as the output from `list`: raw keys sorted by byte order, followed by one empty record. `read`, `save`, and `load` use that format. In default mode, LF ends each key; in `-0` mode, NUL ends each key and LF may occur inside it. NUL cannot occur inside a key in either mode. Backslashes and old escape text are literal bytes. The empty record marks the end of the snapshot. An empty snapshot is that marker alone. A file load rejects a missing marker, bytes after the marker, or an empty file. Operand-free `read` and `write` use the same marker. `read` adds the snapshot's keys to the current tree after a valid marker, and later commands then run. `write` emits the sorted keys and one marker. `write` and `save` fail before emitting or replacing data when the tree holds the empty key. A nonempty snapshot using the other delimiter is rejected. Saving is explicit, so changes in memory are not durable until `save` succeeds. A successful `load` or `read` adds the snapshot's keys to the current tree and leaves keys already present in place. An unsuccessful one leaves the tree intact. Saving writes the snapshot to the named file.
 
 This example uses a temporary snapshot path under `tests/prefix`:
 
 ```sh
-printf 'insert\tB\ninsert\tA\nsave\ttests/prefix/example.snapshot\nclear\nload\ttests/prefix/example.snapshot\ncontains\tA\n' | tests/prefix/bin/cbt
+printf 'add B\nadd A\nsave tests/prefix/example.snapshot\nclear\nload tests/prefix/example.snapshot\nhas A\n' | tests/prefix/bin/cbt
 cat tests/prefix/example.snapshot
 ```
 

@@ -355,8 +355,21 @@ B
 0
 2
 1
-0
 1
+1
+
+
+==== cbt-load-layer ====
+
+2
+2
+2
+1
+1
+1
+1
+1
+0
 
 
 ==== cbt-write-nul ====
@@ -368,7 +381,7 @@ B
 ==== cbt-read-nul ====
 
 0
-3200310030003100
+3200310031003100
 
 
 ==== cbt-save-ab-lf ====
@@ -411,7 +424,7 @@ cbt: load failed
 
 0
 2
-0
+1
 
 
 ==== cbt-load-missing-marker ====
@@ -431,7 +444,7 @@ cbt: load failed
 
 0
 2
-0
+1
 
 
 ==== cbt-read-missing-marker ====
@@ -489,10 +502,10 @@ cbt: load failed
 
 ==== cbt-snapshot-save-symlink ====
 
-cbt: save failed
 2
-1
-prior
+0
+x
+
 
 
 ==== cbt-installed-all-bytes ====
@@ -510,18 +523,270 @@ prior
 
 cbt: load failed
 cbt: load failed
+cbt: load failed
 cbt: save failed
 cbt: load failed
 invalid load rejected: yes
 invalid load retains tree: yes
 other-mode load rejected: yes
 other-mode load retains tree: yes
+failed copy leaves the tree intact: yes
 failed save rejected: yes
-failed save retains file: yes
-failed save retains content: yes
+failed save leaves the file empty: yes
 save succeeds: yes
-save retains metadata: yes
 NUL save bytes: yes
 NUL load in LF mode rejected: yes
 NUL load in LF mode retains tree: yes
 0
+
+
+==== cbt-has-space-absent-lf ====
+
+0
+0
+
+
+==== cbt-has-space-present-lf ====
+
+2
+1
+0
+
+
+==== cbt-add-space-added-lf ====
+
+2
+0
+
+
+==== cbt-add-space-existing-lf ====
+
+2
+1
+0
+
+
+==== cbt-rm-space-missing-lf ====
+
+0
+0
+
+
+==== cbt-rm-space-present-lf ====
+
+2
+1
+0
+
+
+==== cbt-after-space-unmatched-lf ====
+
+notfound
+0
+
+
+==== cbt-after-space-matched-lf ====
+
+2
+found	x
+0
+
+
+==== cbt-list-space-unmatched-lf ====
+
+
+0
+
+
+==== cbt-list-space-matched-lf ====
+
+2
+a b
+
+0
+
+
+==== cbt-has-empty-absent-lf ====
+
+0
+0
+
+
+==== cbt-has-empty-present-lf ====
+
+2
+1
+0
+
+
+==== cbt-add-empty-added-lf ====
+
+2
+0
+
+
+==== cbt-add-empty-existing-lf ====
+
+2
+1
+0
+
+
+==== cbt-rm-empty-missing-lf ====
+
+0
+0
+
+
+==== cbt-rm-empty-present-lf ====
+
+2
+1
+0
+
+
+==== cbt-after-empty-unmatched-lf ====
+
+notfound
+0
+
+
+==== cbt-after-empty-matched-lf ====
+
+2
+found	x
+0
+
+
+==== cbt-list-empty-unmatched-lf ====
+
+
+0
+
+
+==== cbt-list-empty-matched-lf ====
+
+2
+x
+
+0
+
+
+==== cbt-has-space-absent-nul ====
+
+0
+3000
+
+
+==== cbt-has-space-present-nul ====
+
+0
+32003100
+
+
+==== cbt-add-space-added-nul ====
+
+0
+3200
+
+
+==== cbt-add-space-existing-nul ====
+
+0
+32003100
+
+
+==== cbt-rm-space-missing-nul ====
+
+0
+3000
+
+
+==== cbt-rm-space-present-nul ====
+
+0
+32003100
+
+
+==== cbt-after-space-unmatched-nul ====
+
+0
+6e6f74666f756e6400
+
+
+==== cbt-after-space-matched-nul ====
+
+0
+3200666f756e64097800
+
+
+==== cbt-list-space-unmatched-nul ====
+
+0
+00
+
+
+==== cbt-list-space-matched-nul ====
+
+0
+32006120620000
+
+
+==== cbt-has-empty-absent-nul ====
+
+0
+3000
+
+
+==== cbt-has-empty-present-nul ====
+
+0
+32003100
+
+
+==== cbt-add-empty-added-nul ====
+
+0
+3200
+
+
+==== cbt-add-empty-existing-nul ====
+
+0
+32003100
+
+
+==== cbt-rm-empty-missing-nul ====
+
+0
+3000
+
+
+==== cbt-rm-empty-present-nul ====
+
+0
+32003100
+
+
+==== cbt-after-empty-unmatched-nul ====
+
+0
+6e6f74666f756e6400
+
+
+==== cbt-after-empty-matched-nul ====
+
+0
+3200666f756e64097800
+
+
+==== cbt-list-empty-unmatched-nul ====
+
+0
+00
+
+
+==== cbt-list-empty-matched-nul ====
+
+0
+3200780000

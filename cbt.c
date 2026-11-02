@@ -1,8 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,11 +11,12 @@ static int output_failed;
 static const char *match_prefix;
 static FILE *snapshot_output;
 static int raw_stream;
+static int terminator = '\n';
 
 static void response(const char *message)
 {
   fputs(message, stdout);
-  putchar(raw_stream ? 0 : '\n');
+  putchar(terminator);
 }
 
 static void response_suffix(const char *tag, const char *value)
@@ -25,7 +24,7 @@ static void response_suffix(const char *tag, const char *value)
   fputs(tag, stdout);
   putchar('\t');
   fputs(value, stdout);
-  putchar(raw_stream ? 0 : '\n');
+  putchar(terminator);
 }
 
 static int fail(const char *message)
@@ -37,7 +36,7 @@ static int fail(const char *message)
 static int save_key(void)
 {
   fputs(suffix, snapshot_output);
-  fputc(raw_stream ? 0 : '\n', snapshot_output);
+  fputc(terminator, snapshot_output);
   return !ferror(snapshot_output);
 }
 
@@ -47,7 +46,6 @@ static int read_records(FILE *input, critbit0_tree *tree,
   char *line = 0;
   size_t capacity = 0;
   ssize_t length;
-  int terminator = raw_stream ? 0 : '\n';
   int ok = 1;
 
   *saw_marker = 0;
@@ -74,17 +72,83 @@ static int read_records(FILE *input, critbit0_tree *tree,
   return ok;
 }
 
+static critbit0_tree *layer_destination;
+static limitmalloc_pool *layer_pool;
+
+struct layer_added {
+  struct layer_added *next;
+  char *key;
+};
+
+static struct layer_added *added_keys;
+
+static void discard_added(void)
+{
+  while (added_keys) {
+    struct layer_added *item = added_keys;
+    added_keys = item->next;
+    free(item);
+  }
+}
+
+static void undo_added(void)
+{
+  while (added_keys) {
+    struct layer_added *item = added_keys;
+    str0 key = item->key;
+    added_keys = item->next;
+    critbit0_delete(layer_destination, layer_pool, &key);
+    free(item);
+  }
+}
+
+static int layer_key(void)
+{
+  struct layer_added *item;
+  size_t length;
+
+  if (critbit0_contains(layer_destination, &suffix)) return 1;
+  if (!critbit0_insert(layer_destination, layer_pool, &suffix)) return 0;
+  length = strlen(suffix);
+  item = malloc(sizeof *item + length + 1);
+  if (!item) {
+    critbit0_delete(layer_destination, layer_pool, &suffix);
+    return 0;
+  }
+  item->key = (char *) (item + 1);
+  memcpy(item->key, suffix, length + 1);
+  item->next = added_keys;
+  added_keys = item;
+  return 1;
+}
+
+static int layer_records(critbit0_tree *source, critbit0_tree *destination,
+                         limitmalloc_pool *pool)
+{
+  str0 prefix = "";
+  int result;
+
+  layer_destination = destination;
+  layer_pool = pool;
+  added_keys = 0;
+  result = critbit0_allprefixed(source, pool, &suffix, &prefix, layer_key);
+  str0_free(&suffix, pool);
+  if (result != 1) undo_added();
+  else discard_added();
+  critbit0_clear(source, pool);
+  return result == 1;
+}
+
 static int load_snapshot(const char *path, critbit0_tree *tree,
                          limitmalloc_pool *pool)
 {
-  critbit0_tree replacement = { 0 };
+  critbit0_tree incoming = { 0 };
   FILE *input = fopen(path, "r");
   int saw_marker = 0;
   int ok;
-  int terminator = raw_stream ? 0 : '\n';
 
   if (!input) return fail("load failed");
-  ok = read_records(input, &replacement, pool, &saw_marker);
+  ok = read_records(input, &incoming, pool, &saw_marker);
   if (ok && saw_marker) {
     char *extra = 0;
     size_t capacity = 0;
@@ -95,38 +159,29 @@ static int load_snapshot(const char *path, critbit0_tree *tree,
   if (!saw_marker) ok = 0;
   if (fclose(input) == EOF) ok = 0;
   if (!ok) {
-    critbit0_clear(&replacement, pool);
+    critbit0_clear(&incoming, pool);
     return fail("load failed");
   }
-  critbit0_clear(tree, pool);
-  *tree = replacement;
+  if (!layer_records(&incoming, tree, pool)) return fail("load failed");
   return 0;
 }
 
 static int read_snapshot(critbit0_tree *tree, limitmalloc_pool *pool)
 {
-  critbit0_tree replacement = { 0 };
+  critbit0_tree incoming = { 0 };
   int saw_marker = 0;
 
-  if (!read_records(stdin, &replacement, pool, &saw_marker) || !saw_marker) {
-    critbit0_clear(&replacement, pool);
+  if (!read_records(stdin, &incoming, pool, &saw_marker) || !saw_marker) {
+    critbit0_clear(&incoming, pool);
     return fail("read failed");
   }
-  critbit0_clear(tree, pool);
-  *tree = replacement;
+  if (!layer_records(&incoming, tree, pool)) return fail("read failed");
   return 0;
 }
 
 static int save_snapshot(const char *path, critbit0_tree *tree,
                          limitmalloc_pool *pool)
 {
-  struct stat prior;
-  mode_t mode;
-  mode_t mask;
-  int existed = 1;
-  char *temporary;
-  size_t length = strlen(path);
-  int fd;
   FILE *output;
   str0 prefix = "";
   str0 empty = "";
@@ -135,55 +190,14 @@ static int save_snapshot(const char *path, critbit0_tree *tree,
 
   if (critbit0_contains(tree, &empty))
     return fail("empty key cannot be stored");
-  if (lstat(path, &prior) == -1) {
-    if (errno != ENOENT) return fail("save failed");
-    existed = 0;
-  } else if (!S_ISREG(prior.st_mode)) {
-    return fail("save failed");
-  }
-  if (length > (size_t) -1 - 8) return fail("save failed");
-  temporary = malloc(length + 8);
-  if (!temporary) return fail("save failed");
-  memcpy(temporary, path, length);
-  memcpy(temporary + length, ".XXXXXX", 8);
-  fd = mkstemp(temporary);
-  if (fd == -1) {
-    free(temporary);
-    return fail("save failed");
-  }
-  if (existed) {
-    mode = prior.st_mode & 07777;
-    if (fchown(fd, prior.st_uid, prior.st_gid) == -1) ok = 0;
-  } else {
-    mask = umask(0);
-    umask(mask);
-    mode = 0666 & ~mask;
-  }
-  if (ok && fchmod(fd, mode) == -1) ok = 0;
-  output = fdopen(fd, "w");
-  if (!output) {
-    close(fd);
-    ok = 0;
-  }
-  if (ok) {
-    snapshot_output = output;
-    result = critbit0_allprefixed(tree, pool, &suffix, &prefix, save_key);
-    str0_free(&suffix, pool);
-    if (result != 1 || ferror(output)) ok = 0;
-    if (ok && fputc(raw_stream ? 0 : '\n', output) == EOF) ok = 0;
-  }
-  if (output && fclose(output) == EOF) ok = 0;
-  if (ok) {
-    struct stat current;
-    if (existed) {
-      if (lstat(path, &current) == -1 || !S_ISREG(current.st_mode)) ok = 0;
-    } else if (lstat(path, &current) != -1 || errno != ENOENT) {
-      ok = 0;
-    }
-  }
-  if (ok && rename(temporary, path) == -1) ok = 0;
-  if (!ok) unlink(temporary);
-  free(temporary);
+  output = fopen(path, "w");
+  if (!output) return fail("save failed");
+  snapshot_output = output;
+  result = critbit0_allprefixed(tree, pool, &suffix, &prefix, save_key);
+  str0_free(&suffix, pool);
+  if (result != 1 || ferror(output)) ok = 0;
+  if (ok && fputc(terminator, output) == EOF) ok = 0;
+  if (fclose(output) == EOF) ok = 0;
   if (!ok) return fail("save failed");
   return 0;
 }
@@ -201,7 +215,7 @@ static int write_snapshot(critbit0_tree *tree, limitmalloc_pool *pool)
   str0_free(&suffix, pool);
   if (result < 0) return fail("prefix lookup failed");
   if (result != 1 || ferror(stdout)) return fail("output failed");
-  if (fputc(raw_stream ? 0 : '\n', stdout) == EOF) return fail("output failed");
+  if (fputc(terminator, stdout) == EOF) return fail("output failed");
   return 0;
 }
 
@@ -209,7 +223,7 @@ static int match(void)
 {
   fputs(match_prefix, stdout);
   fputs(suffix, stdout);
-  putchar(raw_stream ? 0 : '\n');
+  putchar(terminator);
   if (ferror(stdout)) {
     output_failed = 1;
     return 0;
@@ -219,7 +233,7 @@ static int match(void)
 
 static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
 {
-  char *tab = strchr(line, '\t');
+  char *tab = strchr(line, ' ');
   str0 key;
   int result;
 
@@ -238,15 +252,15 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
     return load_snapshot(key, tree, pool);
   } else if (strcmp(line, "save") == 0) {
     return save_snapshot(key, tree, pool);
-  } else if (strcmp(line, "contains") == 0) {
+  } else if (strcmp(line, "has") == 0) {
     response(critbit0_contains(tree, &key) ? "1" : "0");
-  } else if (strcmp(line, "insert") == 0) {
+  } else if (strcmp(line, "add") == 0) {
     result = critbit0_insert(tree, pool, &key);
     response(result == 2 ? "2" : result == 1 ? "1" : "0");
     if (!result) return fail("insert failed");
-  } else if (strcmp(line, "delete") == 0) {
+  } else if (strcmp(line, "rm") == 0) {
     response(critbit0_delete(tree, pool, &key) ? "1" : "0");
-  } else if (strcmp(line, "firstprefixed") == 0) {
+  } else if (strcmp(line, "after") == 0) {
     errno = 0;
     result = critbit0_firstprefixed(tree, pool, &suffix, &key);
     if (!result && errno) return fail("prefix lookup failed");
@@ -254,7 +268,7 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
       response_suffix("found", suffix);
       str0_free(&suffix, pool);
     } else response("notfound");
-  } else if (strcmp(line, "allprefixed") == 0) {
+  } else if (strcmp(line, "list") == 0) {
     if (!*key && critbit0_contains(tree, &key))
       return fail("empty key cannot be listed");
     match_prefix = key;
@@ -277,12 +291,14 @@ int main(int argc, char **argv)
   size_t capacity = 0;
   ssize_t length;
   int status = 0;
-  int terminator;
 
-  if (argc == 1) raw_stream = 0;
-  else if (argc == 2 && strcmp(argv[1], "-0") == 0) raw_stream = 1;
-  else return fail("unsupported option");
-  terminator = raw_stream ? 0 : '\n';
+  if (argc == 1) {
+    raw_stream = 0;
+    terminator = '\n';
+  } else if (argc == 2 && strcmp(argv[1], "-0") == 0) {
+    raw_stream = 1;
+    terminator = 0;
+  } else return fail("unsupported option");
 
   while ((length = getdelim(&line, &capacity, terminator, stdin)) != -1) {
     if (length == 0 || line[length - 1] != terminator) {

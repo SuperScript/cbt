@@ -7,7 +7,7 @@ static int visits;
 static int emit_insert(void)
 {
   ++visits;
-  return printf("insert\tc%s\n", suffix) > 0;
+  return printf("add c%s\n", suffix) > 0;
 }
 
 int main(void)
