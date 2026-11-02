@@ -19,14 +19,6 @@ static void response(const char *message)
   putchar(terminator);
 }
 
-static void response_suffix(const char *tag, const char *value)
-{
-  fputs(tag, stdout);
-  putchar('\t');
-  fputs(value, stdout);
-  putchar(terminator);
-}
-
 static int fail(const char *message)
 {
   fprintf(stderr, "cbt: %s\n", message);
@@ -265,9 +257,9 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
     result = critbit0_firstprefixed(tree, pool, &suffix, &key);
     if (!result && errno) return fail("prefix lookup failed");
     if (result) {
-      response_suffix("found", suffix);
+      response(suffix);
       str0_free(&suffix, pool);
-    } else response("notfound");
+    }
   } else if (strcmp(line, "list") == 0) {
     if (!*key && critbit0_contains(tree, &key))
       return fail("empty key cannot be listed");

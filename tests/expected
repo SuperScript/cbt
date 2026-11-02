@@ -93,10 +93,8 @@ installed clear: yes
 
 ==== cbt-firstprefixed ====
 
-notfound
 2
-found	b
-notfound
+b
 0
 
 
@@ -176,7 +174,7 @@ ac
 cbt: empty key cannot be listed
 2
 1
-found	
+
 1
 
 
@@ -194,16 +192,36 @@ cbt: insert failed
 0
 
 
+==== cbt-after-empty-suffix-lf ====
+
+2
+
+0
+
+
+==== cbt-after-empty-suffix-nul ====
+
+0
+320000
+
+
+==== cbt-after-allocation-failure ====
+
+cbt: prefix lookup failed
+2
+0
+
+
 ==== cbt-raw-lf-bytes ====
 
 0
-320a310a666f756e64095c09017f0a415c09017f0a0a
+320a310a5c09017f0a415c09017f0a0a
 
 
 ==== cbt-literal-old-escapes ====
 
 0
-320a666f756e64095c6e5c7834310a
+320a5c6e5c7834310a
 
 
 ==== cbt-invalid-verb ====
@@ -234,7 +252,7 @@ cbt: unterminated request
 ==== cbt-nul-stream ====
 
 0
-32003100666f756e64090a095c7a007072650a095c7a0000
+320031000a095c7a007072650a095c7a0000
 
 
 ==== cbt-contains-absent-nul ====
@@ -282,7 +300,7 @@ cbt: unterminated request
 ==== cbt-nul-statuses ====
 
 0
-300032003100300031006e6f74666f756e640000
+3000320031003000310000
 
 
 ==== cbt-nul-incomplete ====
@@ -581,14 +599,13 @@ NUL load in LF mode retains tree: yes
 
 ==== cbt-after-space-unmatched-lf ====
 
-notfound
 0
 
 
 ==== cbt-after-space-matched-lf ====
 
 2
-found	x
+x
 0
 
 
@@ -647,14 +664,13 @@ a b
 
 ==== cbt-after-empty-unmatched-lf ====
 
-notfound
 0
 
 
 ==== cbt-after-empty-matched-lf ====
 
 2
-found	x
+x
 0
 
 
@@ -711,13 +727,13 @@ x
 ==== cbt-after-space-unmatched-nul ====
 
 0
-6e6f74666f756e6400
+
 
 
 ==== cbt-after-space-matched-nul ====
 
 0
-3200666f756e64097800
+32007800
 
 
 ==== cbt-list-space-unmatched-nul ====
@@ -771,13 +787,13 @@ x
 ==== cbt-after-empty-unmatched-nul ====
 
 0
-6e6f74666f756e6400
+
 
 
 ==== cbt-after-empty-matched-nul ====
 
 0
-3200666f756e64097800
+32007800
 
 
 ==== cbt-list-empty-unmatched-nul ====

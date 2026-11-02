@@ -176,6 +176,39 @@ then
 fi
 _check "${basedir}/cbt_insert_failure"
 
+_run cbt-after-empty-suffix-lf
+_cbt 'add ca' 'after ca'
+
+_run cbt-after-empty-suffix-nul
+{ printf 'add ca\000after ca\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-after-allocation-failure
+cat > "${basedir}/cbt_after_failure.c" <<'EOF'
+#define main cbt_program_main
+#include "../../cbt.c"
+#undef main
+
+int main(void)
+{
+  critbit0_tree tree = { 0 };
+  limitmalloc_pool pool = { LIMITMALLOC_MAX, 0, 0 };
+  char add[] = "add ab";
+  char request[] = "after a";
+
+  if (dispatch(add, &tree, &pool) != 0) return 1;
+  pool.limitmalloc_private_limit = pool.limitmalloc_private_allocated;
+  return dispatch(request, &tree, &pool) == 1 ? 0 : 1;
+}
+EOF
+if ! "${CC:-cc}" -I. -o "${basedir}/cbt_after_failure" \
+  "${basedir}/cbt_after_failure.c" libcritbit0.a 2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/cbt_after_failure"
+
 _run cbt-raw-lf-bytes
 { printf 'add A\\\t\001\177\nhas A\\\t\001\177\nafter A\nlist A\n' \
 | "${home}/tests/prefix/bin/cbt" > "${basedir}/raw-output"; echo "$?"; } | _sanitize
