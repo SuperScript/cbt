@@ -246,9 +246,9 @@ _run cbt-unsupported-option
 _hex < "${basedir}/nul-output"
 
 _run cbt-snapshot-roundtrip
-_cbt 'insert\t' 'insert\tB' 'insert\tA' \
+_cbt 'insert\tB' 'insert\tA' \
   'save\ttests/basedir/snapshot' 'clear' \
-  'load\ttests/basedir/snapshot' 'contains\tA' 'contains\tB' 'contains\t'
+  'load\ttests/basedir/snapshot' 'contains\tA' 'contains\tB'
 cat "${basedir}/snapshot" | _sanitize
 
 _run cbt-nul-snapshot
@@ -269,14 +269,123 @@ cat "${basedir}/load-error"
 
 _run cbt-snapshot-empty
 : > "${basedir}/empty"
-_cbt 'insert\tx' 'load\ttests/basedir/empty' 'contains\tx' \
-  'save\ttests/basedir/empty'
-test ! -s "${basedir}/empty"
-echo "$?"
-{ printf 'insert\tx\000load\ttests/basedir/empty\000contains\tx\000save\ttests/basedir/empty\000' \
-| "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+{ printf 'load\ttests/basedir/empty\n' | ./cbt > "${basedir}/raw-output" 2> "${basedir}/load-error"; echo "$?"; } | _sanitize
+_hex < "${basedir}/raw-output"
+cat "${basedir}/load-error"
+
+_run cbt-load-empty-nul
+: > "${basedir}/empty-nul"
+{ printf 'load\ttests/basedir/empty-nul\000' | ./cbt -0 > "${basedir}/nul-output" 2> "${basedir}/load-error"; echo "$?"; } | _sanitize
 _hex < "${basedir}/nul-output"
-test ! -s "${basedir}/empty"
+cat "${basedir}/load-error"
+
+_run cbt-write-lf
+{ printf 'insert\tB\ninsert\tA\nwrite\n' | "${home}/tests/prefix/bin/cbt" > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+cat "${basedir}/raw-output"
+
+_run cbt-read-lf
+{ printf 'insert\tkept\nread\nA\nB\n\ncontains\tA\ncontains\tkept\ncontains\tB\n' | ./cbt > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+cat "${basedir}/raw-output"
+
+_run cbt-write-nul
+{ printf 'insert\tB\000insert\tA\000write\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-read-nul
+{ printf 'insert\tkept\000read\000A\000B\000\000contains\tA\000contains\tkept\000contains\tB\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-save-ab-lf
+{ printf 'insert\tB\ninsert\tA\nsave\ttests/basedir/ab-lf\n' | ./cbt > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+cat "${basedir}/raw-output"
+_hex < "${basedir}/ab-lf"
+
+_run cbt-save-ab-nul
+{ printf 'insert\tB\000insert\tA\000save\ttests/basedir/ab-nul\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+_hex < "${basedir}/ab-nul"
+
+_run cbt-save-empty-lf
+{ printf 'save\ttests/basedir/empty-tree\n' | ./cbt > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/raw-output"
+_hex < "${basedir}/empty-tree"
+
+_run cbt-save-empty-nul
+{ printf 'save\ttests/basedir/empty-tree-nul\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+_hex < "${basedir}/empty-tree-nul"
+
+_run cbt-load-after-marker
+printf 'A\n\nB\n' > "${basedir}/after-marker"
+{ printf 'load\ttests/basedir/after-marker\n' | ./cbt > "${basedir}/raw-output" 2> "${basedir}/load-error"; echo "$?"; } | _sanitize
+_hex < "${basedir}/raw-output"
+cat "${basedir}/load-error"
+
+_run cbt-load-marker-only
+printf '\n' > "${basedir}/marker-only"
+{ printf 'insert\tx\nload\ttests/basedir/marker-only\ncontains\tx\n' | ./cbt > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+cat "${basedir}/raw-output"
+
+_run cbt-load-missing-marker
+printf 'A\nB\n' > "${basedir}/no-marker"
+{ printf 'insert\tkept\nload\ttests/basedir/no-marker\n' | ./cbt > "${basedir}/raw-output" 2> "${basedir}/load-error"; echo "$?"; } | _sanitize
+cat "${basedir}/raw-output"
+cat "${basedir}/load-error"
+
+_run cbt-write-empty-lf
+{ printf 'write\n' | ./cbt > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/raw-output"
+
+_run cbt-read-empty
+{ printf 'insert\tx\nread\n\ncontains\tx\n' | ./cbt > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+cat "${basedir}/raw-output"
+
+_run cbt-read-missing-marker
+{ printf 'insert\tkept\nread\nA\n' | ./cbt > "${basedir}/raw-output" 2> "${basedir}/load-error"; echo "$?"; } | _sanitize
+cat "${basedir}/raw-output"
+cat "${basedir}/load-error"
+cat > "${basedir}/cbt_read_missing.c" <<'EOF'
+#define main cbt_program_main
+#include "../../cbt.c"
+#undef main
+
+int main(void)
+{
+  critbit0_tree tree = { 0 };
+  limitmalloc_pool pool = { LIMITMALLOC_MAX, 0, 0 };
+  str0 key = "kept";
+  FILE *input;
+
+  if (critbit0_insert(&tree, &pool, &key) != 2) return 1;
+  input = fopen("tests/basedir/read-missing", "w");
+  if (!input) return 1;
+  if (fputs("A\n", input) == EOF || fclose(input) == EOF) return 1;
+  if (!freopen("tests/basedir/read-missing", "r", stdin)) return 1;
+  if (read_snapshot(&tree, &pool) == 0) return 1;
+  if (!critbit0_contains(&tree, &key)) return 1;
+  printf("retained: yes\n");
+  critbit0_clear(&tree, &pool);
+  return 0;
+}
+EOF
+if ! "${CC:-cc}" -I. -o "${basedir}/cbt_read_missing" \
+  "${basedir}/cbt_read_missing.c" libcritbit0.a 2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/cbt_read_missing"
+
+_run cbt-write-empty-key
+{ printf 'insert\t\nwrite\n' | ./cbt > "${basedir}/raw-output" 2> "${basedir}/load-error"; echo "$?"; } | _sanitize
+cat "${basedir}/raw-output"
+cat "${basedir}/load-error"
+
+_run cbt-save-empty-key
+{ printf 'insert\t\nsave\ttests/basedir/empty-key-save\n' | ./cbt > "${basedir}/raw-output" 2> "${basedir}/load-error"; echo "$?"; } | _sanitize
+cat "${basedir}/raw-output"
+cat "${basedir}/load-error"
+test ! -e "${basedir}/empty-key-save"
 echo "$?"
 
 _run cbt-snapshot-invalid

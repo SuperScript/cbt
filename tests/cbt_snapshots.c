@@ -52,8 +52,8 @@ int main(int argc, char **argv)
                 after.st_uid == before.st_uid && after.st_gid == before.st_gid);
   file = fopen(argv[2], "r");
   if (!file) return 1;
-  pass &= check("NUL save bytes", fread(contents, 1, 9, file) == 9 &&
-                memcmp(contents, "retained\0", 9) == 0 && fgetc(file) == EOF);
+  pass &= check("NUL save bytes", fread(contents, 1, 10, file) == 10 &&
+                memcmp(contents, "retained\0\0", 10) == 0 && fgetc(file) == EOF);
   if (fclose(file) == EOF) return 1;
   raw_stream = 0;
   pass &= check("NUL load in LF mode rejected", load_snapshot(argv[2], &tree, &pool) != 0);

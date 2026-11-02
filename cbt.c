@@ -41,18 +41,16 @@ static int save_key(void)
   return !ferror(snapshot_output);
 }
 
-static int load_snapshot(const char *path, critbit0_tree *tree,
-                         limitmalloc_pool *pool)
+static int read_records(FILE *input, critbit0_tree *tree,
+                        limitmalloc_pool *pool, int *saw_marker)
 {
-  critbit0_tree replacement = { 0 };
-  FILE *input = fopen(path, "r");
   char *line = 0;
   size_t capacity = 0;
   ssize_t length;
-  int ok = 1;
   int terminator = raw_stream ? 0 : '\n';
+  int ok = 1;
 
-  if (!input) return fail("load failed");
+  *saw_marker = 0;
   while ((length = getdelim(&line, &capacity, terminator, input)) != -1) {
     str0 key;
     if (length == 0 || line[length - 1] != terminator ||
@@ -61,22 +59,61 @@ static int load_snapshot(const char *path, critbit0_tree *tree,
       break;
     }
     line[length - 1] = 0;
+    if (line[0] == 0) {
+      *saw_marker = 1;
+      break;
+    }
     key = line;
-    if (!critbit0_insert(&replacement, pool, &key)) {
+    if (!critbit0_insert(tree, pool, &key)) {
       ok = 0;
       break;
     }
   }
   if (ferror(input)) ok = 0;
-  if (fclose(input) == EOF) ok = 0;
   free(line);
+  return ok;
+}
+
+static int load_snapshot(const char *path, critbit0_tree *tree,
+                         limitmalloc_pool *pool)
+{
+  critbit0_tree replacement = { 0 };
+  FILE *input = fopen(path, "r");
+  int saw_marker = 0;
+  int ok;
+  int terminator = raw_stream ? 0 : '\n';
+
+  if (!input) return fail("load failed");
+  ok = read_records(input, &replacement, pool, &saw_marker);
+  if (ok && saw_marker) {
+    char *extra = 0;
+    size_t capacity = 0;
+    if (getdelim(&extra, &capacity, terminator, input) != -1) ok = 0;
+    if (ferror(input)) ok = 0;
+    free(extra);
+  }
+  if (!saw_marker) ok = 0;
+  if (fclose(input) == EOF) ok = 0;
   if (!ok) {
     critbit0_clear(&replacement, pool);
     return fail("load failed");
   }
   critbit0_clear(tree, pool);
   *tree = replacement;
-  response("loaded");
+  return 0;
+}
+
+static int read_snapshot(critbit0_tree *tree, limitmalloc_pool *pool)
+{
+  critbit0_tree replacement = { 0 };
+  int saw_marker = 0;
+
+  if (!read_records(stdin, &replacement, pool, &saw_marker) || !saw_marker) {
+    critbit0_clear(&replacement, pool);
+    return fail("read failed");
+  }
+  critbit0_clear(tree, pool);
+  *tree = replacement;
   return 0;
 }
 
@@ -92,9 +129,12 @@ static int save_snapshot(const char *path, critbit0_tree *tree,
   int fd;
   FILE *output;
   str0 prefix = "";
+  str0 empty = "";
   int result;
   int ok = 1;
 
+  if (critbit0_contains(tree, &empty))
+    return fail("empty key cannot be stored");
   if (lstat(path, &prior) == -1) {
     if (errno != ENOENT) return fail("save failed");
     existed = 0;
@@ -130,6 +170,7 @@ static int save_snapshot(const char *path, critbit0_tree *tree,
     result = critbit0_allprefixed(tree, pool, &suffix, &prefix, save_key);
     str0_free(&suffix, pool);
     if (result != 1 || ferror(output)) ok = 0;
+    if (ok && fputc(raw_stream ? 0 : '\n', output) == EOF) ok = 0;
   }
   if (output && fclose(output) == EOF) ok = 0;
   if (ok) {
@@ -144,7 +185,23 @@ static int save_snapshot(const char *path, critbit0_tree *tree,
   if (!ok) unlink(temporary);
   free(temporary);
   if (!ok) return fail("save failed");
-  response("saved");
+  return 0;
+}
+
+static int write_snapshot(critbit0_tree *tree, limitmalloc_pool *pool)
+{
+  str0 empty = "";
+  str0 prefix = "";
+  int result;
+
+  if (critbit0_contains(tree, &empty))
+    return fail("empty key cannot be stored");
+  snapshot_output = stdout;
+  result = critbit0_allprefixed(tree, pool, &suffix, &prefix, save_key);
+  str0_free(&suffix, pool);
+  if (result < 0) return fail("prefix lookup failed");
+  if (result != 1 || ferror(stdout)) return fail("output failed");
+  if (fputc(raw_stream ? 0 : '\n', stdout) == EOF) return fail("output failed");
   return 0;
 }
 
@@ -167,9 +224,13 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
   int result;
 
   if (!tab) {
-    if (strcmp(line, "clear") != 0) return fail("invalid request");
-    critbit0_clear(tree, pool);
-    return 0;
+    if (strcmp(line, "clear") == 0) {
+      critbit0_clear(tree, pool);
+      return 0;
+    }
+    if (strcmp(line, "read") == 0) return read_snapshot(tree, pool);
+    if (strcmp(line, "write") == 0) return write_snapshot(tree, pool);
+    return fail("invalid request");
   }
   *tab++ = 0;
   key = tab;

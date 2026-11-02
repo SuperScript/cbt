@@ -97,8 +97,10 @@ The installed `tests/prefix/bin/cbt` reads requests from standard input and writ
 | `clear` | No output |
 | `firstprefixed` | `found<TAB>suffix` or `notfound` |
 | `allprefixed` | Zero or more bare full keys, then an empty record |
-| `load` | `loaded` |
-| `save` | `saved` |
+| `load` | No output |
+| `save` | No output |
+| `read` | No output |
+| `write` | Sorted keys, then an empty record |
 
 An `allprefixed` result containing the empty key fails before output. Operands and returned keys or suffixes carry raw bytes in both modes; backslashes, tabs, and control bytes have no special encoding. NUL cannot occur in a key. In the default mode, LF ends a record and cannot occur inside a key. The `-0` mode permits LF inside a key. A request without its selected ending delimiter fails. Snapshot files use the selected mode's delimiter as described below. For example:
 
@@ -116,7 +118,7 @@ printf 'insert\tA\nB\000firstprefixed\tA\000' | tests/prefix/bin/cbt -0 | od -An
 
 ## Snapshots
 
-A snapshot contains raw keys sorted by byte order. In default mode, LF ends each key; in `-0` mode, NUL ends each key and LF may occur inside it. NUL cannot occur inside a key in either mode. Backslashes and old escape text are literal bytes. An empty record represents the empty key; an empty file represents an empty tree and loads in either mode. A nonempty snapshot using the other delimiter is rejected. Saving is explicit, so changes in memory are not durable until `save` succeeds. A successful `load` replaces the current tree; an unsuccessful load leaves it intact. Saving atomically replaces the destination, preserves an existing regular file's mode and ownership, refuses a symlink, and leaves the prior file intact on failure.
+A snapshot contains raw keys sorted by byte order, followed by one empty record. In default mode, LF ends each key; in `-0` mode, NUL ends each key and LF may occur inside it. NUL cannot occur inside a key in either mode. Backslashes and old escape text are literal bytes. The empty record marks the end of the snapshot. An empty snapshot is that marker alone. A file load rejects a missing marker, bytes after the marker, or an empty file. Operand-free `read` and `write` use the same marker. `read` replaces the tree only after a valid marker, and later commands then run. `write` emits the sorted keys and one marker. `write` and `save` fail before emitting or replacing data when the tree holds the empty key. A nonempty snapshot using the other delimiter is rejected. Saving is explicit, so changes in memory are not durable until `save` succeeds. A successful `load` or `read` replaces the current tree; an unsuccessful one leaves it intact. Saving atomically replaces the destination, preserves an existing regular file's mode and ownership, refuses a symlink, and leaves the prior file intact on failure.
 
 This example uses a temporary snapshot path under `tests/prefix`:
 
@@ -130,11 +132,10 @@ The output from `cbt` followed by `cat` is:
 ```text
 2
 2
-saved
-loaded
 1
 A
 B
+
 ```
 
 ## Imported source
