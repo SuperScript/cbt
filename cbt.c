@@ -23,7 +23,7 @@ static void response(const char *message)
 static int fail(const char *message)
 {
   fflush(stdout);
-  fprintf(stderr, "cbt: %s\n", message);
+  fprintf(stderr, "cbt: fatal: %s\n", message);
   return 1;
 }
 

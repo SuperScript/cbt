@@ -30,7 +30,7 @@ The `cbt` program keeps one crit-bit tree in memory for the life of the process.
 
 - `-0`: End every request, response, and snapshot record with NUL instead of LF. Keys may then contain LF.
 
-Any other argument fails with `cbt: unsupported option`.
+Any other argument fails with `cbt: fatal: unsupported option`.
 
 ### Records
 
@@ -55,7 +55,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 | `exit` | None |
 
 - `has`: Reports membership; the tree is unchanged.
-- `add`: Inserts a copy of the key. On allocation failure, `add` prints `0`, reports `cbt: insert failed`, and stops; the tree is unchanged.
+- `add`: Inserts a copy of the key. On allocation failure, `add` prints `0`, reports `cbt: fatal: insert failed`, and stops; the tree is unchanged.
 - `rm`: Deletes the key.
 - `clear`: Removes every key.
 - `after`: Finds the first key in byte order that starts with the prefix and prints the bytes after the prefix. A key equal to the prefix gives an empty suffix, printed as an empty record. A prefix no key starts with prints no record, so a caller that needs to tell these cases apart uses `has` or `list`.
@@ -66,7 +66,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 - `write`: Writes the snapshot to standard output.
 - `exit`: Stops `cbt` with status 0 without reading further requests. Output for earlier requests is already written.
 
-An unknown command, a missing space after a command that takes data, or a space after `clear`, `read`, `write`, or `exit` fails with `cbt: invalid request`.
+An unknown command, a missing space after a command that takes data, or a space after `clear`, `read`, `write`, or `exit` fails with `cbt: fatal: invalid request`.
 
 ### Snapshots
 
@@ -82,18 +82,18 @@ On the first error, `cbt` writes one message to standard error and exits with st
 
 | Message | Cause |
 | --- | --- |
-| `cbt: unsupported option` | An argument other than a single `-0` |
-| `cbt: invalid request` | An unknown command, wrong use of the space, or NUL inside a default-mode request |
-| `cbt: unterminated request` | Input ends without a final delimiter |
-| `cbt: insert failed` | `add` ran out of memory |
-| `cbt: prefix lookup failed` | `after`, `list`, `save`, or `write` ran out of memory |
-| `cbt: empty key cannot be listed` | `list` would print the empty key |
-| `cbt: empty key cannot be stored` | `save` or `write` while the tree holds the empty key |
-| `cbt: load failed` | The file is missing, unreadable, or malformed, or memory ran out |
-| `cbt: read failed` | The stream snapshot is malformed, lacks its marker, or memory ran out |
-| `cbt: save failed` | The file cannot be opened or written |
-| `cbt: output failed` | Standard output cannot be written, including when its reader has closed it |
-| `cbt: input failed` | Standard input cannot be read |
+| `cbt: fatal: unsupported option` | An argument other than a single `-0` |
+| `cbt: fatal: invalid request` | An unknown command, wrong use of the space, or NUL inside a default-mode request |
+| `cbt: fatal: unterminated request` | Input ends without a final delimiter |
+| `cbt: fatal: insert failed` | `add` ran out of memory |
+| `cbt: fatal: prefix lookup failed` | `after`, `list`, `save`, or `write` ran out of memory |
+| `cbt: fatal: empty key cannot be listed` | `list` would print the empty key |
+| `cbt: fatal: empty key cannot be stored` | `save` or `write` while the tree holds the empty key |
+| `cbt: fatal: load failed` | The file is missing, unreadable, or malformed, or memory ran out |
+| `cbt: fatal: read failed` | The stream snapshot is malformed, lacks its marker, or memory ran out |
+| `cbt: fatal: save failed` | The file cannot be opened or written |
+| `cbt: fatal: output failed` | Standard output cannot be written, including when its reader has closed it |
+| `cbt: fatal: input failed` | Standard input cannot be read |
 
 ### Examples
 
@@ -147,7 +147,7 @@ A failure stops the stream and sets the exit status:
 printf 'add a\nbogus\nhas a\n' | tests/prefix/bin/cbt; echo "status $?"
 ```
 
-Standard output holds `2` and `status 1`; standard error holds `cbt: invalid request`.
+Standard output holds `2` and `status 1`; standard error holds `cbt: fatal: invalid request`.
 
 ## C library
 
