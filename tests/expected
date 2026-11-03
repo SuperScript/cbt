@@ -171,10 +171,10 @@ ac
 
 ==== cbt-empty-key ====
 
-cbt: empty key cannot be listed
 2
 1
 
+cbt: empty key cannot be listed
 1
 
 
@@ -187,8 +187,8 @@ cbt: empty key cannot be listed
 
 ==== cbt-insert-allocation-failure ====
 
-cbt: insert failed
 0
+cbt: insert failed
 0
 
 
@@ -207,8 +207,8 @@ cbt: insert failed
 
 ==== cbt-after-allocation-failure ====
 
-cbt: prefix lookup failed
 2
+cbt: prefix lookup failed
 0
 
 
@@ -238,8 +238,8 @@ cbt: invalid request
 
 ==== cbt-lf-boundary ====
 
-cbt: invalid request
 2
+cbt: invalid request
 1
 
 
@@ -492,15 +492,15 @@ cbt: empty key cannot be stored
 
 ==== cbt-snapshot-invalid ====
 
-cbt: load failed
 2
+cbt: load failed
 1
 
 
 ==== cbt-snapshot-lf-boundary ====
 
-cbt: load failed
 2
+cbt: load failed
 1
 
 
@@ -513,8 +513,8 @@ cbt: load failed
 
 ==== cbt-snapshot-missing ====
 
-cbt: load failed
 2
+cbt: load failed
 1
 
 
@@ -540,19 +540,19 @@ x
 ==== cbt-snapshot-rollback ====
 
 cbt: load failed
-cbt: load failed
-cbt: load failed
-cbt: save failed
-cbt: load failed
 invalid load rejected: yes
 invalid load retains tree: yes
+cbt: load failed
 other-mode load rejected: yes
 other-mode load retains tree: yes
+cbt: load failed
 failed copy leaves the tree intact: yes
+cbt: prefix lookup failed
 failed save rejected: yes
 failed save leaves the file empty: yes
 save succeeds: yes
 NUL save bytes: yes
+cbt: load failed
 NUL load in LF mode rejected: yes
 NUL load in LF mode retains tree: yes
 0
@@ -806,3 +806,77 @@ x
 
 0
 3200780000
+
+
+==== cbt-response-per-request-lf ====
+
+320a
+310a
+0
+
+
+==== cbt-response-per-request-nul ====
+
+3200
+3100
+0
+
+
+==== cbt-closed-output ====
+
+cbt: output failed
+1
+
+
+==== cbt-read-unordered-lf ====
+
+a
+b
+
+0
+
+
+==== cbt-read-unordered-nul ====
+
+0
+6100620000
+
+
+==== cbt-load-unordered-lf ====
+
+a
+b
+
+0
+
+
+==== make-header-dependencies ====
+
+critbit0.h critbit0_insert.o 1
+critbit0.h str0_free.o 0
+critbit0.h limitmalloc_open.o 0
+critbit0.h cbt 1
+str0.h critbit0_insert.o 1
+str0.h str0_free.o 1
+str0.h limitmalloc_open.o 0
+str0.h cbt 1
+limitmalloc.h critbit0_insert.o 1
+limitmalloc.h str0_free.o 1
+limitmalloc.h limitmalloc_open.o 1
+limitmalloc.h cbt 1
+int64.h critbit0_insert.o 1
+int64.h str0_free.o 1
+int64.h limitmalloc_open.o 1
+int64.h cbt 1
+uint8.h critbit0_insert.o 1
+uint8.h str0_free.o 0
+uint8.h limitmalloc_open.o 0
+uint8.h cbt 1
+uint32.h critbit0_insert.o 1
+uint32.h str0_free.o 0
+uint32.h limitmalloc_open.o 0
+uint32.h cbt 1
+uint64.h critbit0_insert.o 1
+uint64.h str0_free.o 1
+uint64.h limitmalloc_open.o 0
+uint64.h cbt 1

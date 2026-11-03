@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,7 @@ static void response(const char *message)
 
 static int fail(const char *message)
 {
+  fflush(stdout);
   fprintf(stderr, "cbt: %s\n", message);
   return 1;
 }
@@ -187,6 +189,10 @@ static int save_snapshot(const char *path, critbit0_tree *tree,
   snapshot_output = output;
   result = critbit0_allprefixed(tree, pool, &suffix, &prefix, save_key);
   str0_free(&suffix, pool);
+  if (result < 0) {
+    fclose(output);
+    return fail("prefix lookup failed");
+  }
   if (result != 1 || ferror(output)) ok = 0;
   if (ok && fputc(terminator, output) == EOF) ok = 0;
   if (fclose(output) == EOF) ok = 0;
@@ -291,6 +297,7 @@ int main(int argc, char **argv)
     raw_stream = 1;
     terminator = 0;
   } else return fail("unsupported option");
+  signal(SIGPIPE, SIG_IGN);
 
   while ((length = getdelim(&line, &capacity, terminator, stdin)) != -1) {
     if (length == 0 || line[length - 1] != terminator) {
@@ -303,7 +310,7 @@ int main(int argc, char **argv)
       break;
     }
     status = dispatch(line, &tree, &pool);
-    if (status || ferror(stdout)) {
+    if (status || fflush(stdout) == EOF || ferror(stdout)) {
       if (!status) status = fail("output failed");
       break;
     }

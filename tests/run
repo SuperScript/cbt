@@ -40,6 +40,43 @@ _hex() {
   printf '\n'
 }
 
+# _exchange option request...
+#   Send each printf-format request to one running installed cbt and print
+#   the two-byte response that arrives before the next request is sent.
+_exchange() {
+  local option="$1"
+  shift
+  local in="${basedir}/exchange-in"
+  local out="${basedir}/exchange-out"
+  local pid
+  local watchdog
+  local request
+
+  rm -f "${in}" "${out}"
+  mkfifo "${in}" "${out}"
+  if test -n "${option}"
+  then
+    "${home}/tests/prefix/bin/cbt" "${option}" < "${in}" > "${out}" &
+  else
+    "${home}/tests/prefix/bin/cbt" < "${in}" > "${out}" &
+  fi
+  pid="$!"
+  { sleep 5; kill "${pid}"; } > /dev/null 2>&1 &
+  watchdog="$!"
+  exec 3> "${in}" 4< "${out}"
+  for request in "$@"
+  do
+    ( printf "${request}" >&3 ) 2> /dev/null
+    dd bs=1 count=2 <&4 2> /dev/null | _hex
+  done
+  exec 3>&-
+  wait "${pid}"
+  echo "$?"
+  exec 4<&-
+  kill "${watchdog}" 2> /dev/null
+  rm -f "${in}" "${out}"
+}
+
 ####
 
 rm -rf "${basedir:?}/"*
@@ -611,3 +648,53 @@ _hex < "${basedir}/nul-output"
 _run cbt-list-empty-matched-nul
 { printf 'add x\000list \000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
 _hex < "${basedir}/nul-output"
+
+_run cbt-response-per-request-lf
+_exchange '' 'add a\n' 'has a\n'
+
+_run cbt-response-per-request-nul
+_exchange -0 'add a\000' 'has a\000'
+
+_run cbt-closed-output
+{ awk 'BEGIN { for (i = 0; i < 100000; i++) print "add k" i }' \
+| "${home}/tests/prefix/bin/cbt" 2> "${basedir}/pipe-error"; echo "$?" > "${basedir}/pipe-status"; } | true
+cat "${basedir}/pipe-error" "${basedir}/pipe-status"
+
+_run cbt-read-unordered-lf
+_cbt_installed 'read' 'b' 'a' 'b' '' 'write'
+
+_run cbt-read-unordered-nul
+{ printf 'read\000b\000a\000b\000\000write\000' | "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-load-unordered-lf
+printf 'b\na\nb\n\n' > "${basedir}/unordered"
+_cbt 'load tests/basedir/unordered' 'write'
+
+_run make-header-dependencies
+mkdir -p "${basedir}/make"
+cp Makefile "${basedir}/make/Makefile"
+(
+  cd "${basedir}/make" || exit 1
+  for path in "${home}"/*.c "${home}"/*.h
+  do
+    name="${path##*/}"
+    : > "${name}"
+    case "${name}" in
+      (*.c) : > "${name%.c}.o";;
+    esac
+  done
+  : > libcritbit0.a
+  : > cbt
+  touch -t 200001010000 *
+  for header in critbit0.h str0.h limitmalloc.h int64.h uint8.h uint32.h uint64.h
+  do
+    touch -t 200001020000 "${header}"
+    for target in critbit0_insert.o str0_free.o limitmalloc_open.o cbt
+    do
+      "${MAKE:-make}" -q "${target}" > /dev/null 2>&1
+      printf '%s %s %s\n' "${header}" "${target}" "$?"
+    done
+    touch -t 200001010000 "${header}"
+  done
+)

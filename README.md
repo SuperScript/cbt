@@ -16,6 +16,137 @@ Anyone who needs crit-bit trees can use the library from a program or run its co
 
 Run `make install PREFIX=/path/to/prefix` to install `libcritbit0.a` in `PREFIX/lib`, the public headers in `PREFIX/include`, and `cbt` in `PREFIX/bin`.
 
+## Command-line program
+
+### Synopsis
+
+```text
+cbt [-0]
+```
+
+The `cbt` program keeps one crit-bit tree in memory for the life of the process. It reads requests from standard input, writes results to standard output, and writes errors to standard error. It writes each request's output before reading the next request, so another program can keep it running and exchange one request and response at a time. The tree starts empty and is discarded at exit; `save` and `write` keep a copy.
+
+### Options
+
+- `-0`: End every request, response, and snapshot record with NUL instead of LF. Keys may then contain LF.
+
+Any other argument fails with `cbt: unsupported option`.
+
+### Records
+
+Every request and every output record ends with the selected delimiter: LF by default, NUL with `-0`. A request is a command name, one space, and the data, followed by the delimiter. The first space ends the command name; later spaces belong to the data. The commands `clear`, `read`, and `write` take no data and no space. An empty operand is a space followed directly by the delimiter, and names the empty key.
+
+Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control bytes have no special meaning. NUL cannot occur in a key. In default mode, LF ends a record and cannot occur inside a key, and a NUL byte inside a request fails. A final request without its delimiter fails.
+
+### Commands
+
+| Request | Output |
+| --- | --- |
+| `has <key>` | `1` if the key is present, `0` if absent |
+| `add <key>` | `2` if added, `1` if already present, `0` on allocation failure, followed by an error |
+| `rm <key>` | `1` if deleted, `0` if absent |
+| `clear` | None |
+| `after <prefix>` | The suffix of the first matching key, or nothing when no key matches |
+| `list <prefix>` | Each matching full key in byte order, then one empty record |
+| `load <path>` | None |
+| `save <path>` | None |
+| `read` | None; the snapshot records follow the request on standard input |
+| `write` | The snapshot: every key in byte order, then one empty record |
+
+- `has`: Reports membership; the tree is unchanged.
+- `add`: Inserts a copy of the key. On allocation failure, `add` prints `0`, reports `cbt: insert failed`, and stops; the tree is unchanged.
+- `rm`: Deletes the key.
+- `clear`: Removes every key.
+- `after`: Finds the first key in byte order that starts with the prefix and prints the bytes after the prefix. A key equal to the prefix gives an empty suffix, printed as an empty record. A prefix no key starts with prints no record, so a caller that needs to tell these cases apart uses `has` or `list`.
+- `list`: Prints the full keys that start with the prefix. The empty prefix matches every key. Because the empty record ends the list, `list` fails before printing when its results include the empty key.
+- `load`: Reads the snapshot file at the path, which is the rest of the request and may contain spaces. See [Snapshots](#snapshots).
+- `save`: Writes the snapshot to the named file.
+- `read`: Reads a snapshot from standard input up to its empty record, then resumes reading requests.
+- `write`: Writes the snapshot to standard output.
+
+An unknown command, a missing space after a command that takes data, or a space after `clear`, `read`, or `write` fails with `cbt: invalid request`.
+
+### Snapshots
+
+A snapshot is raw keys, each ending with the selected delimiter, followed by one empty record. The `save` and `write` commands emit the keys sorted by byte order, the same format as the output from `list`. The `load` and `read` commands accept keys in any order and add a repeated key once. The empty record is the end marker, so an empty tree's snapshot is the marker alone, and a tree holding the empty key cannot be stored. In `-0` mode, LF may occur inside a key. Backslashes and escape text are literal bytes.
+
+The `load` and `read` commands add the snapshot's keys to the current tree. Keys already present, including keys the snapshot lacks, stay in place. A snapshot that fails to load, because it is malformed or memory runs out, leaves the tree as it was. A file `load` rejects an empty file, a missing marker, and bytes after the marker. A nonempty snapshot written with the other delimiter is rejected.
+
+The `save` and `write` commands fail before opening the file or writing output when the tree holds the empty key. The `save` command writes the named file in place: it truncates the file, then writes the snapshot, and a save through a symlink writes the symlink's target. A failed save can leave the file empty or partial. Changes in memory are durable only after a `save` succeeds.
+
+### Errors and exit status
+
+On the first error, `cbt` writes one message to standard error and exits with status 1. Output already written for earlier requests stays written, and later requests are not read. At the end of input, with no error, `cbt` exits with status 0.
+
+| Message | Cause |
+| --- | --- |
+| `cbt: unsupported option` | An argument other than a single `-0` |
+| `cbt: invalid request` | An unknown command, wrong use of the space, or NUL inside a default-mode request |
+| `cbt: unterminated request` | Input ends without a final delimiter |
+| `cbt: insert failed` | `add` ran out of memory |
+| `cbt: prefix lookup failed` | `after`, `list`, `save`, or `write` ran out of memory |
+| `cbt: empty key cannot be listed` | `list` would print the empty key |
+| `cbt: empty key cannot be stored` | `save` or `write` while the tree holds the empty key |
+| `cbt: load failed` | The file is missing, unreadable, or malformed, or memory ran out |
+| `cbt: read failed` | The stream snapshot is malformed, lacks its marker, or memory ran out |
+| `cbt: save failed` | The file cannot be opened or written |
+| `cbt: output failed` | Standard output cannot be written, including when its reader has closed it |
+| `cbt: input failed` | Standard input cannot be read |
+
+### Examples
+
+These examples run the installed program from `tests/prefix/bin/cbt`, after `make install PREFIX=tests/prefix`.
+
+Add two keys, then query them:
+
+```sh
+printf 'add ca\nadd cb\nhas ca\nhas x\nafter c\nlist c\n' | tests/prefix/bin/cbt
+```
+
+The output is `2`, `2`, `1`, `0`, `a`, `ca`, `cb`, and an empty record, each ending with LF.
+
+Load keys from a stream, add one, and write the result:
+
+```sh
+{ printf 'read\n'; printf 'b\na\n\n'; printf 'add c\nwrite\n'; } | tests/prefix/bin/cbt
+```
+
+The output is `2`, then `a`, `b`, `c`, and an empty record.
+
+Save a tree to a file, clear it, and load it back:
+
+```sh
+printf 'add B\nadd A\nsave tests/prefix/example.snapshot\nclear\nload tests/prefix/example.snapshot\nhas A\n' | tests/prefix/bin/cbt
+cat tests/prefix/example.snapshot
+```
+
+The output from `cbt` followed by `cat` is:
+
+```text
+2
+2
+1
+A
+B
+
+```
+
+Send a key containing a literal newline in `-0` mode and print the NUL-framed response as hexadecimal bytes:
+
+```sh
+printf 'add A\nB\000after A\000' | tests/prefix/bin/cbt -0 | od -An -tx1
+```
+
+The output is `32 00 0a 42 00`: `2`, then the suffix LF `B`.
+
+A failure stops the stream and sets the exit status:
+
+```sh
+printf 'add a\nbogus\nhas a\n' | tests/prefix/bin/cbt; echo "status $?"
+```
+
+Standard output holds `2` and `status 1`; standard error holds `cbt: invalid request`.
+
 ## C library
 
 Include `<critbit0.h>` and link with `libcritbit0.a`. Keys are NUL-terminated byte strings (`str0`). Initialize a `critbit0_tree` to zero and set the `limitmalloc_pool` allocation limit (the example uses 1024 bytes). The tree copies inserted keys and owns those copies and its nodes. Use the same pool for insertion, deletion, prefix lookups, and clearing. Free each caller-owned suffix with `str0_free` using that pool. Clear the tree before discarding it.
@@ -83,59 +214,6 @@ first suffix: a
 match: a
 match: b
 deleted ca: 1
-```
-
-## Command stream
-
-The installed `tests/prefix/bin/cbt` reads requests from standard input and writes results to standard output. By default, each record ends with LF. The `-0` option uses NUL. A request is a command, a space, and its data. `clear`, `read`, and `write` have no data and no space. The first space separates the command from its data, and later spaces stay in the data. An empty operand is a space with nothing after it. One process keeps its tree across requests. Errors go to standard error and stop the process.
-
-| Request | Response |
-| --- | --- |
-| `has <key>` | `1` if present, `0` if absent |
-| `add <key>` | `2` if added, `1` if present, `0` on allocation failure |
-| `rm <key>` | `1` if deleted, `0` if absent |
-| `clear` | No output |
-| `after <prefix>` | The suffix when a match exists; no output when it does not |
-| `list <prefix>` | Zero or more bare full keys, then an empty record |
-| `load <path>` | No output. Reads the `list` output format |
-| `save <path>` | No output. Writes the `list` output format |
-| `read` | No output. Reads the `list` output format |
-| `write` | Sorted keys, then an empty record |
-
-A `list` result containing the empty key fails before output. An empty `after` result is an empty record. An `after` allocation failure reports on standard error and exits nonzero. Operands and returned keys or suffixes carry raw bytes in both modes; backslashes, tabs, and control bytes have no special encoding. NUL cannot occur in a key. In the default mode, LF ends a record and cannot occur inside a key. The `-0` mode permits LF inside a key. A request without its selected ending delimiter fails. Snapshot files use the selected mode's delimiter as described below. For example:
-
-```sh
-printf 'add ca\nadd cb\nafter c\nlist c\n' | tests/prefix/bin/cbt
-```
-
-The response is `2`, `2`, `a`, `ca`, `cb`, and an empty record, each terminated by LF.
-
-The following command sends a key containing a literal newline and prints the NUL-framed response as hexadecimal bytes:
-
-```sh
-printf 'add A\nB\000after A\000' | tests/prefix/bin/cbt -0 | od -An -tx1
-```
-
-## Snapshots
-
-A snapshot has the same format as the output from `list`: raw keys sorted by byte order, followed by one empty record. `read`, `save`, and `load` use that format. In default mode, LF ends each key; in `-0` mode, NUL ends each key and LF may occur inside it. NUL cannot occur inside a key in either mode. Backslashes and old escape text are literal bytes. The empty record marks the end of the snapshot. An empty snapshot is that marker alone. A file load rejects a missing marker, bytes after the marker, or an empty file. Operand-free `read` and `write` use the same marker. `read` adds the snapshot's keys to the current tree after a valid marker, and later commands then run. `write` emits the sorted keys and one marker. `write` and `save` fail before emitting or replacing data when the tree holds the empty key. A nonempty snapshot using the other delimiter is rejected. Saving is explicit, so changes in memory are not durable until `save` succeeds. A successful `load` or `read` adds the snapshot's keys to the current tree and leaves keys already present in place. An unsuccessful one leaves the tree intact. Saving writes the snapshot to the named file.
-
-This example uses a temporary snapshot path under `tests/prefix`:
-
-```sh
-printf 'add B\nadd A\nsave tests/prefix/example.snapshot\nclear\nload tests/prefix/example.snapshot\nhas A\n' | tests/prefix/bin/cbt
-cat tests/prefix/example.snapshot
-```
-
-The output from `cbt` followed by `cat` is:
-
-```text
-2
-2
-1
-A
-B
-
 ```
 
 ## Imported source
