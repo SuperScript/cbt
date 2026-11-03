@@ -885,6 +885,8 @@ uint64.h cbt 1
 ==== make-clean ====
 
 0
+cbt.c
+critbit0.h
 
 
 ==== make-failed-cbt-leaves-no-temp ====
@@ -892,10 +894,46 @@ uint64.h cbt 1
 failed
 cbt
 cbt.c
-cbt.o
 
 
 ==== make-failed-library-leaves-no-temp ====
 
 failed
 libcritbit0.a
+
+
+==== make-install-over-running-cbt ====
+
+0
+0
+0
+0
+2
+
+
+==== make-install-modes ====
+
+-rwxr-xr-x .../install/bin/cbt
+-rw-r--r-- .../install/include/critbit0.h
+-rw-r--r-- .../install/lib/libcritbit0.a
+.../install/bin:
+cbt
+
+.../install/include:
+critbit0.h
+int64.h
+limitmalloc.h
+str0.h
+uint32.h
+uint64.h
+uint8.h
+
+.../install/lib:
+libcritbit0.a
+
+
+==== make-install-failure-leaves-no-temp ====
+
+failed
+prior
+cbt

@@ -35,12 +35,12 @@ $(_NEEDVAR_TARGETS):
 	  test -n "$$val" || { echo "variable not defined: $$v" >&2; exit 1; }
 
 #_# clean
-#_#   Remove test artifacts
+#_#   Remove build and test artifacts
 #_#
 .PHONY: clean
 clean:
-	@rm -f tests/output
-	@rm -rf tests/basedir
+	@rm -f $(LIB_OBJECTS) libcritbit0.a cbt tests/output
+	@rm -rf tests/basedir tests/prefix
 
 #_# test
 #_#   Run test suite and diff with expected results
@@ -58,9 +58,14 @@ test: cbt
 .PHONY: install
 install: libcritbit0.a cbt
 	@mkdir -p "$(PREFIX)/lib" "$(PREFIX)/include" "$(PREFIX)/bin"
-	@cp cbt "$(PREFIX)/bin/cbt"
-	@cp libcritbit0.a "$(PREFIX)/lib/libcritbit0.a"
-	@for header in $(PUBLIC_HEADERS); do cp "$$header" "$(PREFIX)/include/$$header" || exit 1; done
+	@put() { \
+	    temp="$$(mktemp "$$2.XXXXXX")" || exit 1; \
+	    cp "$$1" "$$temp" && chmod "$$3" "$$temp" && mv "$$temp" "$$2" || \
+	      { rm -f "$$temp"; exit 1; }; \
+	  }; \
+	  put cbt "$(PREFIX)/bin/cbt" 755 && \
+	  put libcritbit0.a "$(PREFIX)/lib/libcritbit0.a" 644 && \
+	  for header in $(PUBLIC_HEADERS); do put "$$header" "$(PREFIX)/include/$$header" 644 || exit 1; done
 
 libcritbit0.a: $(LIB_OBJECTS)
 	@temp="$$(mktemp -d "$@.XXXXXX")" || exit 1; \

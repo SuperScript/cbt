@@ -79,7 +79,7 @@ _exchange() {
 
 # _make_stubs dir
 #   Copy the Makefile into dir beside empty, equally old stand-ins for the
-#   sources, headers, objects, library, and cbt.
+#   sources, headers, library objects, library, and cbt.
 _make_stubs() {
   local dir="$1"
   local path
@@ -92,6 +92,7 @@ _make_stubs() {
     name="${path##*/}"
     : > "${dir}/${name}"
     case "${name}" in
+      (cbt.c) ;;
       (*.c) : > "${dir}/${name%.c}.o";;
     esac
   done
@@ -711,15 +712,18 @@ _make_stubs "${basedir}/make"
 )
 
 _run make-clean
-mkdir -p "${basedir}/make-clean/tests/basedir/sub"
-cp Makefile "${basedir}/make-clean/Makefile"
+_make_stubs "${basedir}/make-clean"
 (
   cd "${basedir}/make-clean" || exit 1
+  mkdir -p tests/basedir/sub tests/prefix/bin
   : > tests/output
   : > tests/basedir/sub/file
+  : > tests/prefix/bin/cbt
   "${MAKE:-make}" clean > /dev/null 2>&1
   echo "$?"
   ls tests
+  ls | grep -E '[.]o$|^libcritbit0[.]a$|^cbt$'
+  ls cbt.c critbit0.h
 )
 
 _run make-failed-cbt-leaves-no-temp
@@ -748,4 +752,45 @@ _make_stubs "${basedir}/make-library"
     echo failed
   fi
   ls | grep '^libcritbit0'
+)
+
+_run make-install-over-running-cbt
+rm -rf "${basedir}/install"
+"${MAKE:-make}" install PREFIX="${basedir}/install" > /dev/null 2>&1
+echo "$?"
+mkfifo "${basedir}/install-in"
+"${basedir}/install/bin/cbt" < "${basedir}/install-in" > "${basedir}/install-out" &
+pid="$!"
+exec 5> "${basedir}/install-in"
+"${MAKE:-make}" install PREFIX="${basedir}/install" > /dev/null 2>&1
+echo "$?"
+cmp cbt "${basedir}/install/bin/cbt"
+echo "$?"
+printf 'add a\n' >&5
+exec 5>&-
+wait "${pid}"
+echo "$?"
+cat "${basedir}/install-out"
+
+_run make-install-modes
+ls -l "${basedir}/install/bin/cbt" "${basedir}/install/lib/libcritbit0.a" "${basedir}/install/include/critbit0.h" \
+| awk '{ print $1, $NF }' | _sanitize
+ls "${basedir}/install/bin" "${basedir}/install/lib" "${basedir}/install/include" | _sanitize
+
+_run make-install-failure-leaves-no-temp
+_make_stubs "${basedir}/make-install"
+(
+  cd "${basedir}/make-install" || exit 1
+  rm -f cbt
+  mkdir cbt prefix prefix/bin
+  touch -t 200001010000 cbt
+  printf 'prior\n' > prefix/bin/cbt
+  if "${MAKE:-make}" install PREFIX=prefix > /dev/null 2>&1
+  then
+    echo installed
+  else
+    echo failed
+  fi
+  cat prefix/bin/cbt
+  ls prefix/bin
 )
