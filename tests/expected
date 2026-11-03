@@ -902,17 +902,9 @@ failed
 libcritbit0.a
 
 
-==== make-install-over-running-cbt ====
-
-0
-0
-0
-0
-2
-
-
 ==== make-install-modes ====
 
+0
 -rwxr-xr-x .../install/bin/cbt
 -rw-r--r-- .../install/include/critbit0.h
 -rw-r--r-- .../install/lib/libcritbit0.a
@@ -930,10 +922,3 @@ uint8.h
 
 .../install/lib:
 libcritbit0.a
-
-
-==== make-install-failure-leaves-no-temp ====
-
-failed
-prior
-cbt

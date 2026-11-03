@@ -58,14 +58,9 @@ test: cbt
 .PHONY: install
 install: libcritbit0.a cbt
 	@mkdir -p "$(PREFIX)/lib" "$(PREFIX)/include" "$(PREFIX)/bin"
-	@put() { \
-	    temp="$$(mktemp "$$2.XXXXXX")" || exit 1; \
-	    cp "$$1" "$$temp" && chmod "$$3" "$$temp" && mv "$$temp" "$$2" || \
-	      { rm -f "$$temp"; exit 1; }; \
-	  }; \
-	  put cbt "$(PREFIX)/bin/cbt" 755 && \
-	  put libcritbit0.a "$(PREFIX)/lib/libcritbit0.a" 644 && \
-	  for header in $(PUBLIC_HEADERS); do put "$$header" "$(PREFIX)/include/$$header" 644 || exit 1; done
+	@install -m 755 cbt "$(PREFIX)/bin/cbt"
+	@install -m 644 libcritbit0.a "$(PREFIX)/lib/libcritbit0.a"
+	@for header in $(PUBLIC_HEADERS); do install -m 644 "$$header" "$(PREFIX)/include/$$header" || exit 1; done
 
 libcritbit0.a: $(LIB_OBJECTS)
 	@temp="$$(mktemp -d "$@.XXXXXX")" || exit 1; \

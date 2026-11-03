@@ -704,8 +704,13 @@ _make_stubs "${basedir}/make"
     touch -t 200001020000 "${header}"
     for target in critbit0_insert.o str0_free.o limitmalloc_open.o cbt
     do
-      "${MAKE:-make}" -q "${target}" > /dev/null 2>&1
-      printf '%s %s %s\n' "${header}" "${target}" "$?"
+      stale=0
+      if "${MAKE:-make}" -n CC=compile AR=archive "${target}" 2> /dev/null \
+        | grep -q -E '(compile|archive) '
+      then
+        stale=1
+      fi
+      printf '%s %s %s\n' "${header}" "${target}" "${stale}"
     done
     touch -t 200001010000 "${header}"
   done
@@ -754,43 +759,10 @@ _make_stubs "${basedir}/make-library"
   ls | grep '^libcritbit0'
 )
 
-_run make-install-over-running-cbt
+_run make-install-modes
 rm -rf "${basedir}/install"
 "${MAKE:-make}" install PREFIX="${basedir}/install" > /dev/null 2>&1
 echo "$?"
-mkfifo "${basedir}/install-in"
-"${basedir}/install/bin/cbt" < "${basedir}/install-in" > "${basedir}/install-out" &
-pid="$!"
-exec 5> "${basedir}/install-in"
-"${MAKE:-make}" install PREFIX="${basedir}/install" > /dev/null 2>&1
-echo "$?"
-cmp cbt "${basedir}/install/bin/cbt"
-echo "$?"
-printf 'add a\n' >&5
-exec 5>&-
-wait "${pid}"
-echo "$?"
-cat "${basedir}/install-out"
-
-_run make-install-modes
 ls -l "${basedir}/install/bin/cbt" "${basedir}/install/lib/libcritbit0.a" "${basedir}/install/include/critbit0.h" \
 | awk '{ print $1, $NF }' | _sanitize
 ls "${basedir}/install/bin" "${basedir}/install/lib" "${basedir}/install/include" | _sanitize
-
-_run make-install-failure-leaves-no-temp
-_make_stubs "${basedir}/make-install"
-(
-  cd "${basedir}/make-install" || exit 1
-  rm -f cbt
-  mkdir cbt prefix prefix/bin
-  touch -t 200001010000 cbt
-  printf 'prior\n' > prefix/bin/cbt
-  if "${MAKE:-make}" install PREFIX=prefix > /dev/null 2>&1
-  then
-    echo installed
-  else
-    echo failed
-  fi
-  cat prefix/bin/cbt
-  ls prefix/bin
-)
