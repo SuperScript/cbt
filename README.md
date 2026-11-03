@@ -34,7 +34,7 @@ Any other argument fails with `cbt: unsupported option`.
 
 ### Records
 
-Every request and every output record ends with the selected delimiter: LF by default, NUL with `-0`. A request is a command name, one space, and the data, followed by the delimiter. The first space ends the command name; later spaces belong to the data. The commands `clear`, `read`, and `write` take no data and no space. An empty operand is a space followed directly by the delimiter, and names the empty key.
+Every request and every output record ends with the selected delimiter: LF by default, NUL with `-0`. A request is a command name, one space, and the data, followed by the delimiter. The first space ends the command name; later spaces belong to the data. The commands `clear`, `read`, `write`, and `exit` take no data and no space. An empty operand is a space followed directly by the delimiter, and names the empty key.
 
 Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control bytes have no special meaning. NUL cannot occur in a key. In default mode, LF ends a record and cannot occur inside a key, and a NUL byte inside a request fails. A final request without its delimiter fails.
 
@@ -52,6 +52,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 | `save <path>` | None |
 | `read` | None; the snapshot records follow the request on standard input |
 | `write` | The snapshot: every key in byte order, then one empty record |
+| `exit` | None |
 
 - `has`: Reports membership; the tree is unchanged.
 - `add`: Inserts a copy of the key. On allocation failure, `add` prints `0`, reports `cbt: insert failed`, and stops; the tree is unchanged.
@@ -63,8 +64,9 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 - `save`: Writes the snapshot to the named file.
 - `read`: Reads a snapshot from standard input up to its empty record, then resumes reading requests.
 - `write`: Writes the snapshot to standard output.
+- `exit`: Stops `cbt` with status 0 without reading further requests. Output for earlier requests is already written.
 
-An unknown command, a missing space after a command that takes data, or a space after `clear`, `read`, or `write` fails with `cbt: invalid request`.
+An unknown command, a missing space after a command that takes data, or a space after `clear`, `read`, `write`, or `exit` fails with `cbt: invalid request`.
 
 ### Snapshots
 
@@ -76,7 +78,7 @@ The `save` and `write` commands fail before opening the file or writing output w
 
 ### Errors and exit status
 
-On the first error, `cbt` writes one message to standard error and exits with status 1. Output already written for earlier requests stays written, and later requests are not read. At the end of input, with no error, `cbt` exits with status 0.
+On the first error, `cbt` writes one message to standard error and exits with status 1. Output already written for earlier requests stays written, and later requests are not read. At the end of input or on `exit`, with no error, `cbt` exits with status 0.
 
 | Message | Cause |
 | --- | --- |

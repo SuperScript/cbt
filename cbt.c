@@ -242,6 +242,7 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
     }
     if (strcmp(line, "read") == 0) return read_snapshot(tree, pool);
     if (strcmp(line, "write") == 0) return write_snapshot(tree, pool);
+    if (strcmp(line, "exit") == 0) return -1;
     return fail("invalid request");
   }
   *tab++ = 0;
@@ -310,6 +311,10 @@ int main(int argc, char **argv)
       break;
     }
     status = dispatch(line, &tree, &pool);
+    if (status < 0) {
+      status = 0;
+      break;
+    }
     if (status || fflush(stdout) == EOF || ferror(stdout)) {
       if (!status) status = fail("output failed");
       break;

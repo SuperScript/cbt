@@ -850,6 +850,37 @@ b
 0
 
 
+==== cbt-exit-lf ====
+
+2
+0
+
+
+==== cbt-exit-nul ====
+
+0
+3200
+
+
+==== cbt-exit-open-input ====
+
+320a
+
+0
+
+
+==== cbt-exit-data ====
+
+cbt: invalid request
+1
+
+
+==== cbt-exit-space ====
+
+cbt: invalid request
+1
+
+
 ==== make-header-dependencies ====
 
 critbit0.h critbit0_insert.o 1

@@ -695,6 +695,22 @@ _run cbt-load-unordered-lf
 printf 'b\na\nb\n\n' > "${basedir}/unordered"
 _cbt 'load tests/basedir/unordered' 'write'
 
+_run cbt-exit-lf
+_cbt_installed 'add a' 'exit' 'add b'
+
+_run cbt-exit-nul
+{ printf 'add a\000exit\000add b\000' | "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-exit-open-input
+_exchange '' 'add a\n' 'exit\n'
+
+_run cbt-exit-data
+_cbt_installed 'exit x'
+
+_run cbt-exit-space
+_cbt_installed 'exit '
+
 _run make-header-dependencies
 _make_stubs "${basedir}/make"
 (
