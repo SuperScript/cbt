@@ -711,6 +711,73 @@ _cbt_installed 'exit x'
 _run cbt-exit-space
 _cbt_installed 'exit '
 
+_run cbt-missing-operand
+for command in has add rm after list load save
+do
+  _cbt_installed "${command}"
+done
+
+_run cbt-unexpected-operand
+for command in clear read write
+do
+  _cbt_installed "${command} x"
+done
+
+_run cbt-input-failed
+{ "${home}/tests/prefix/bin/cbt" < tests 2>&1; echo "$?"; } | _sanitize
+
+_run cbt-load-read-error
+_cbt_installed 'add kept' 'load tests'
+
+_run cbt-save-cannot-open
+_cbt_installed 'add x' 'save tests/basedir/missing-directory/snapshot'
+
+_run cbt-save-write-error
+_cbt_installed 'add x' 'save /dev/full'
+
+_run cbt-read-malformed
+{ printf 'add kept\nread\nA' | "${home}/tests/prefix/bin/cbt" 2>&1; echo "$?"; } | _sanitize
+
+_run cbt-list-output-failed
+awk 'BEGIN { print "read"; for (i = 0; i < 10000; i++) print "key" i; print ""; print "list " }' \
+| { "${home}/tests/prefix/bin/cbt" 2>&1 > /dev/full; echo "$?"; } | _sanitize
+
+_run cbt-write-output-failed
+awk 'BEGIN { print "read"; for (i = 0; i < 10000; i++) print "key" i; print ""; print "write" }' \
+| { "${home}/tests/prefix/bin/cbt" 2>&1 > /dev/full; echo "$?"; } | _sanitize
+
+_run cbt-dispatch-failures
+cat > "${basedir}/cbt_dispatch.c" <<'EOF'
+#define main cbt_program_main
+#include "../../cbt.c"
+#undef main
+
+/* Usage: cbt_dispatch limited|unlimited request
+   Add "ab", optionally stop further allocation, then dispatch request. */
+int main(int argc, char **argv)
+{
+  critbit0_tree tree = { 0 };
+  limitmalloc_pool pool = { LIMITMALLOC_MAX, 0, 0 };
+  char add[] = "add ab";
+
+  if (argc != 3) return 2;
+  if (dispatch(add, &tree, &pool) != 0) return 2;
+  if (strcmp(argv[1], "limited") == 0)
+    pool.limitmalloc_private_limit = pool.limitmalloc_private_allocated;
+  return dispatch(argv[2], &tree, &pool);
+}
+EOF
+if ! "${CC:-cc}" -I. -o "${basedir}/cbt_dispatch" \
+  "${basedir}/cbt_dispatch.c" libcritbit0.a 2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/cbt_dispatch" limited 'list a'
+_check "${basedir}/cbt_dispatch" limited write
+printf 'A\n\n' | _check "${basedir}/cbt_dispatch" limited read
+_check "${basedir}/cbt_dispatch" unlimited read < tests
+
 _run make-header-dependencies
 _make_stubs "${basedir}/make"
 (

@@ -20,10 +20,12 @@ static void response(const char *message)
   putchar(terminator);
 }
 
-static int fail(const char *message)
+/* Report a failure of command, or of cbt itself when command is null. */
+static int fail(const char *command, const char *message)
 {
   fflush(stdout);
-  fprintf(stderr, "cbt: fatal: %s\n", message);
+  fprintf(stderr, "cbt: fatal: %s%s%s\n", command ? command : "",
+          command ? ": " : "", message);
   return 1;
 }
 
@@ -34,20 +36,26 @@ static int save_key(void)
   return !ferror(snapshot_output);
 }
 
+enum { RECORDS_OK, RECORDS_MALFORMED, RECORDS_READ_ERROR, RECORDS_NO_MEMORY };
+
+static const char *const records_failure[] = {
+  0, "malformed record", "read error", "out of memory"
+};
+
 static int read_records(FILE *input, critbit0_tree *tree,
                         limitmalloc_pool *pool, int *saw_marker)
 {
   char *line = 0;
   size_t capacity = 0;
   ssize_t length;
-  int ok = 1;
+  int result = RECORDS_OK;
 
   *saw_marker = 0;
   while ((length = getdelim(&line, &capacity, terminator, input)) != -1) {
     str0 key;
     if (length == 0 || line[length - 1] != terminator ||
         memchr(line, 0, (size_t) length - 1)) {
-      ok = 0;
+      result = RECORDS_MALFORMED;
       break;
     }
     line[length - 1] = 0;
@@ -57,13 +65,13 @@ static int read_records(FILE *input, critbit0_tree *tree,
     }
     key = line;
     if (!critbit0_insert(tree, pool, &key)) {
-      ok = 0;
+      result = RECORDS_NO_MEMORY;
       break;
     }
   }
-  if (ferror(input)) ok = 0;
+  if (ferror(input)) result = RECORDS_READ_ERROR;
   free(line);
-  return ok;
+  return result;
 }
 
 static critbit0_tree *layer_destination;
@@ -138,38 +146,48 @@ static int load_snapshot(const char *path, critbit0_tree *tree,
 {
   critbit0_tree incoming = { 0 };
   FILE *input = fopen(path, "r");
+  const char *failure = 0;
   int saw_marker = 0;
-  int ok;
+  int result;
 
-  if (!input) return fail("load failed");
-  ok = read_records(input, &incoming, pool, &saw_marker);
-  if (ok && saw_marker) {
+  if (!input) return fail("load", "cannot open file");
+  result = read_records(input, &incoming, pool, &saw_marker);
+  if (result != RECORDS_OK) failure = records_failure[result];
+  else if (!saw_marker) failure = "missing marker";
+  else {
     char *extra = 0;
     size_t capacity = 0;
-    if (getdelim(&extra, &capacity, terminator, input) != -1) ok = 0;
-    if (ferror(input)) ok = 0;
+    if (getdelim(&extra, &capacity, terminator, input) != -1)
+      failure = "data after marker";
+    else if (ferror(input)) failure = "read error";
     free(extra);
   }
-  if (!saw_marker) ok = 0;
-  if (fclose(input) == EOF) ok = 0;
-  if (!ok) {
+  if (fclose(input) == EOF && !failure) failure = "read error";
+  if (failure) {
     critbit0_clear(&incoming, pool);
-    return fail("load failed");
+    return fail("load", failure);
   }
-  if (!layer_records(&incoming, tree, pool)) return fail("load failed");
+  if (!layer_records(&incoming, tree, pool))
+    return fail("load", "out of memory");
   return 0;
 }
 
 static int read_snapshot(critbit0_tree *tree, limitmalloc_pool *pool)
 {
   critbit0_tree incoming = { 0 };
+  const char *failure = 0;
   int saw_marker = 0;
+  int result;
 
-  if (!read_records(stdin, &incoming, pool, &saw_marker) || !saw_marker) {
+  result = read_records(stdin, &incoming, pool, &saw_marker);
+  if (result != RECORDS_OK) failure = records_failure[result];
+  else if (!saw_marker) failure = "missing marker";
+  if (failure) {
     critbit0_clear(&incoming, pool);
-    return fail("read failed");
+    return fail("read", failure);
   }
-  if (!layer_records(&incoming, tree, pool)) return fail("read failed");
+  if (!layer_records(&incoming, tree, pool))
+    return fail("read", "out of memory");
   return 0;
 }
 
@@ -183,20 +201,20 @@ static int save_snapshot(const char *path, critbit0_tree *tree,
   int ok = 1;
 
   if (critbit0_contains(tree, &empty))
-    return fail("empty key cannot be stored");
+    return fail("save", "empty key cannot be stored");
   output = fopen(path, "w");
-  if (!output) return fail("save failed");
+  if (!output) return fail("save", "cannot open file");
   snapshot_output = output;
   result = critbit0_allprefixed(tree, pool, &suffix, &prefix, save_key);
   str0_free(&suffix, pool);
   if (result < 0) {
     fclose(output);
-    return fail("prefix lookup failed");
+    return fail("save", "out of memory");
   }
   if (result != 1 || ferror(output)) ok = 0;
   if (ok && fputc(terminator, output) == EOF) ok = 0;
   if (fclose(output) == EOF) ok = 0;
-  if (!ok) return fail("save failed");
+  if (!ok) return fail("save", "write error");
   return 0;
 }
 
@@ -207,13 +225,13 @@ static int write_snapshot(critbit0_tree *tree, limitmalloc_pool *pool)
   int result;
 
   if (critbit0_contains(tree, &empty))
-    return fail("empty key cannot be stored");
+    return fail("write", "empty key cannot be stored");
   snapshot_output = stdout;
   result = critbit0_allprefixed(tree, pool, &suffix, &prefix, save_key);
   str0_free(&suffix, pool);
-  if (result < 0) return fail("prefix lookup failed");
-  if (result != 1 || ferror(stdout)) return fail("output failed");
-  if (fputc(terminator, stdout) == EOF) return fail("output failed");
+  if (result < 0) return fail("write", "out of memory");
+  if (result != 1 || ferror(stdout)) return fail("write", "output failed");
+  if (fputc(terminator, stdout) == EOF) return fail("write", "output failed");
   return 0;
 }
 
@@ -229,57 +247,146 @@ static int match(void)
   return 1;
 }
 
-static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
+static int command_has(char *operand, critbit0_tree *tree,
+                       limitmalloc_pool *pool)
 {
-  char *tab = strchr(line, ' ');
-  str0 key;
+  str0 key = operand;
+
+  (void) pool;
+  response(critbit0_contains(tree, &key) ? "1" : "0");
+  return 0;
+}
+
+static int command_add(char *operand, critbit0_tree *tree,
+                       limitmalloc_pool *pool)
+{
+  str0 key = operand;
+  int result = critbit0_insert(tree, pool, &key);
+
+  response(result == 2 ? "2" : result == 1 ? "1" : "0");
+  if (!result) return fail("add", "out of memory");
+  return 0;
+}
+
+static int command_rm(char *operand, critbit0_tree *tree,
+                      limitmalloc_pool *pool)
+{
+  str0 key = operand;
+
+  response(critbit0_delete(tree, pool, &key) ? "1" : "0");
+  return 0;
+}
+
+static int command_after(char *operand, critbit0_tree *tree,
+                         limitmalloc_pool *pool)
+{
+  str0 key = operand;
   int result;
 
-  if (!tab) {
-    if (strcmp(line, "clear") == 0) {
-      critbit0_clear(tree, pool);
-      return 0;
-    }
-    if (strcmp(line, "read") == 0) return read_snapshot(tree, pool);
-    if (strcmp(line, "write") == 0) return write_snapshot(tree, pool);
-    if (strcmp(line, "exit") == 0) return -1;
-    return fail("invalid request");
-  }
-  *tab++ = 0;
-  key = tab;
-  if (strcmp(line, "load") == 0) {
-    return load_snapshot(key, tree, pool);
-  } else if (strcmp(line, "save") == 0) {
-    return save_snapshot(key, tree, pool);
-  } else if (strcmp(line, "has") == 0) {
-    response(critbit0_contains(tree, &key) ? "1" : "0");
-  } else if (strcmp(line, "add") == 0) {
-    result = critbit0_insert(tree, pool, &key);
-    response(result == 2 ? "2" : result == 1 ? "1" : "0");
-    if (!result) return fail("insert failed");
-  } else if (strcmp(line, "rm") == 0) {
-    response(critbit0_delete(tree, pool, &key) ? "1" : "0");
-  } else if (strcmp(line, "after") == 0) {
-    errno = 0;
-    result = critbit0_firstprefixed(tree, pool, &suffix, &key);
-    if (!result && errno) return fail("prefix lookup failed");
-    if (result) {
-      response(suffix);
-      str0_free(&suffix, pool);
-    }
-  } else if (strcmp(line, "list") == 0) {
-    if (!*key && critbit0_contains(tree, &key))
-      return fail("empty key cannot be listed");
-    match_prefix = key;
-    result = critbit0_allprefixed(tree, pool, &suffix, &key, match);
+  errno = 0;
+  result = critbit0_firstprefixed(tree, pool, &suffix, &key);
+  if (!result && errno) return fail("after", "out of memory");
+  if (result) {
+    response(suffix);
     str0_free(&suffix, pool);
-    if (result < 0) return fail("prefix lookup failed");
-    if (output_failed || result == 0) return fail("output failed");
-    response("");
-  } else {
-    return fail("invalid request");
   }
   return 0;
+}
+
+static int command_list(char *operand, critbit0_tree *tree,
+                        limitmalloc_pool *pool)
+{
+  str0 key = operand;
+  int result;
+
+  if (!*key && critbit0_contains(tree, &key))
+    return fail("list", "empty key cannot be listed");
+  match_prefix = key;
+  result = critbit0_allprefixed(tree, pool, &suffix, &key, match);
+  str0_free(&suffix, pool);
+  if (result < 0) return fail("list", "out of memory");
+  if (output_failed || result == 0) return fail("list", "output failed");
+  response("");
+  return 0;
+}
+
+static int command_load(char *operand, critbit0_tree *tree,
+                        limitmalloc_pool *pool)
+{
+  return load_snapshot(operand, tree, pool);
+}
+
+static int command_save(char *operand, critbit0_tree *tree,
+                        limitmalloc_pool *pool)
+{
+  return save_snapshot(operand, tree, pool);
+}
+
+static int command_clear(char *operand, critbit0_tree *tree,
+                         limitmalloc_pool *pool)
+{
+  (void) operand;
+  critbit0_clear(tree, pool);
+  return 0;
+}
+
+static int command_read(char *operand, critbit0_tree *tree,
+                        limitmalloc_pool *pool)
+{
+  (void) operand;
+  return read_snapshot(tree, pool);
+}
+
+static int command_write(char *operand, critbit0_tree *tree,
+                         limitmalloc_pool *pool)
+{
+  (void) operand;
+  return write_snapshot(tree, pool);
+}
+
+static int command_exit(char *operand, critbit0_tree *tree,
+                        limitmalloc_pool *pool)
+{
+  (void) operand;
+  (void) tree;
+  (void) pool;
+  return -1;
+}
+
+static const struct command {
+  const char *name;
+  int takes_operand;
+  int (*run)(char *, critbit0_tree *, limitmalloc_pool *);
+} commands[] = {
+  { "has", 1, command_has },
+  { "add", 1, command_add },
+  { "rm", 1, command_rm },
+  { "after", 1, command_after },
+  { "list", 1, command_list },
+  { "load", 1, command_load },
+  { "save", 1, command_save },
+  { "clear", 0, command_clear },
+  { "read", 0, command_read },
+  { "write", 0, command_write },
+  { "exit", 0, command_exit },
+  { 0, 0, 0 }
+};
+
+/* Return 0 to continue, 1 after reporting a failure, or -1 to exit. */
+static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
+{
+  char *operand = strchr(line, ' ');
+  const struct command *command;
+
+  if (operand) *operand++ = 0;
+  for (command = commands; command->name; command++)
+    if (strcmp(line, command->name) == 0) break;
+  if (!command->name) return fail(0, "unknown command");
+  if (command->takes_operand && !operand)
+    return fail(command->name, "missing operand");
+  if (!command->takes_operand && operand)
+    return fail(command->name, "unexpected operand");
+  return command->run(operand, tree, pool);
 }
 
 int main(int argc, char **argv)
@@ -297,17 +404,17 @@ int main(int argc, char **argv)
   } else if (argc == 2 && strcmp(argv[1], "-0") == 0) {
     raw_stream = 1;
     terminator = 0;
-  } else return fail("unsupported option");
+  } else return fail(0, "unsupported option");
   signal(SIGPIPE, SIG_IGN);
 
   while ((length = getdelim(&line, &capacity, terminator, stdin)) != -1) {
     if (length == 0 || line[length - 1] != terminator) {
-      status = fail("unterminated request");
+      status = fail(0, "unterminated request");
       break;
     }
     line[length - 1] = 0;
     if (!raw_stream && memchr(line, 0, (size_t) length - 1)) {
-      status = fail("invalid request");
+      status = fail(0, "NUL in request");
       break;
     }
     status = dispatch(line, &tree, &pool);
@@ -316,12 +423,12 @@ int main(int argc, char **argv)
       break;
     }
     if (status || fflush(stdout) == EOF || ferror(stdout)) {
-      if (!status) status = fail("output failed");
+      if (!status) status = fail(0, "output failed");
       break;
     }
   }
-  if (!status && ferror(stdin)) status = fail("input failed");
-  if (!status && fflush(stdout) == EOF) status = fail("output failed");
+  if (!status && ferror(stdin)) status = fail(0, "input failed");
+  if (!status && fflush(stdout) == EOF) status = fail(0, "output failed");
   critbit0_clear(&tree, &pool);
   free(line);
   return status;

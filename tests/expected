@@ -174,7 +174,7 @@ ac
 2
 1
 
-cbt: fatal: empty key cannot be listed
+cbt: fatal: list: empty key cannot be listed
 1
 
 
@@ -182,13 +182,13 @@ cbt: fatal: empty key cannot be listed
 
 1
 320a
-cbt: fatal: empty key cannot be listed
+cbt: fatal: list: empty key cannot be listed
 
 
 ==== cbt-insert-allocation-failure ====
 
 0
-cbt: fatal: insert failed
+cbt: fatal: add: out of memory
 0
 
 
@@ -208,7 +208,7 @@ cbt: fatal: insert failed
 ==== cbt-after-allocation-failure ====
 
 2
-cbt: fatal: prefix lookup failed
+cbt: fatal: after: out of memory
 0
 
 
@@ -226,20 +226,20 @@ cbt: fatal: prefix lookup failed
 
 ==== cbt-invalid-verb ====
 
-cbt: fatal: invalid request
+cbt: fatal: unknown command
 1
 
 
 ==== cbt-invalid-nul ====
 
-cbt: fatal: invalid request
+cbt: fatal: NUL in request
 1
 
 
 ==== cbt-lf-boundary ====
 
 2
-cbt: fatal: invalid request
+cbt: fatal: unknown command
 1
 
 
@@ -338,24 +338,24 @@ B
 
 1
 3200
-cbt: fatal: load failed
+cbt: fatal: load: malformed record
 1
 320a
-cbt: fatal: load failed
+cbt: fatal: load: malformed record
 
 
 ==== cbt-snapshot-empty ====
 
 1
 
-cbt: fatal: load failed
+cbt: fatal: load: missing marker
 
 
 ==== cbt-load-empty-nul ====
 
 1
 
-cbt: fatal: load failed
+cbt: fatal: load: missing marker
 
 
 ==== cbt-write-lf ====
@@ -435,7 +435,7 @@ B
 
 1
 
-cbt: fatal: load failed
+cbt: fatal: load: data after marker
 
 
 ==== cbt-load-marker-only ====
@@ -449,7 +449,7 @@ cbt: fatal: load failed
 
 1
 2
-cbt: fatal: load failed
+cbt: fatal: load: missing marker
 
 
 ==== cbt-write-empty-lf ====
@@ -469,8 +469,8 @@ cbt: fatal: load failed
 
 1
 2
-cbt: fatal: read failed
-cbt: fatal: read failed
+cbt: fatal: read: missing marker
+cbt: fatal: read: missing marker
 retained: yes
 0
 
@@ -479,28 +479,28 @@ retained: yes
 
 1
 2
-cbt: fatal: empty key cannot be stored
+cbt: fatal: write: empty key cannot be stored
 
 
 ==== cbt-save-empty-key ====
 
 1
 2
-cbt: fatal: empty key cannot be stored
+cbt: fatal: save: empty key cannot be stored
 0
 
 
 ==== cbt-snapshot-invalid ====
 
 2
-cbt: fatal: load failed
+cbt: fatal: load: malformed record
 1
 
 
 ==== cbt-snapshot-lf-boundary ====
 
 2
-cbt: fatal: load failed
+cbt: fatal: load: malformed record
 1
 
 
@@ -514,7 +514,7 @@ cbt: fatal: load failed
 ==== cbt-snapshot-missing ====
 
 2
-cbt: fatal: load failed
+cbt: fatal: load: cannot open file
 1
 
 
@@ -539,20 +539,20 @@ x
 
 ==== cbt-snapshot-rollback ====
 
-cbt: fatal: load failed
+cbt: fatal: load: malformed record
 invalid load rejected: yes
 invalid load retains tree: yes
-cbt: fatal: load failed
+cbt: fatal: load: malformed record
 other-mode load rejected: yes
 other-mode load retains tree: yes
-cbt: fatal: load failed
+cbt: fatal: load: out of memory
 failed copy leaves the tree intact: yes
-cbt: fatal: prefix lookup failed
+cbt: fatal: save: out of memory
 failed save rejected: yes
 failed save leaves the file empty: yes
 save succeeds: yes
 NUL save bytes: yes
-cbt: fatal: load failed
+cbt: fatal: load: malformed record
 NUL load in LF mode rejected: yes
 NUL load in LF mode retains tree: yes
 0
@@ -871,13 +871,103 @@ b
 
 ==== cbt-exit-data ====
 
-cbt: fatal: invalid request
+cbt: fatal: exit: unexpected operand
 1
 
 
 ==== cbt-exit-space ====
 
-cbt: fatal: invalid request
+cbt: fatal: exit: unexpected operand
+1
+
+
+==== cbt-missing-operand ====
+
+cbt: fatal: has: missing operand
+1
+cbt: fatal: add: missing operand
+1
+cbt: fatal: rm: missing operand
+1
+cbt: fatal: after: missing operand
+1
+cbt: fatal: list: missing operand
+1
+cbt: fatal: load: missing operand
+1
+cbt: fatal: save: missing operand
+1
+
+
+==== cbt-unexpected-operand ====
+
+cbt: fatal: clear: unexpected operand
+1
+cbt: fatal: read: unexpected operand
+1
+cbt: fatal: write: unexpected operand
+1
+
+
+==== cbt-input-failed ====
+
+cbt: fatal: input failed
+1
+
+
+==== cbt-load-read-error ====
+
+2
+cbt: fatal: load: read error
+1
+
+
+==== cbt-save-cannot-open ====
+
+2
+cbt: fatal: save: cannot open file
+1
+
+
+==== cbt-save-write-error ====
+
+2
+cbt: fatal: save: write error
+1
+
+
+==== cbt-read-malformed ====
+
+2
+cbt: fatal: read: malformed record
+1
+
+
+==== cbt-list-output-failed ====
+
+cbt: fatal: list: output failed
+1
+
+
+==== cbt-write-output-failed ====
+
+cbt: fatal: write: output failed
+1
+
+
+==== cbt-dispatch-failures ====
+
+2
+cbt: fatal: list: out of memory
+1
+2
+cbt: fatal: write: out of memory
+1
+2
+cbt: fatal: read: out of memory
+1
+2
+cbt: fatal: read: read error
 1
 
 

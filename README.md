@@ -55,7 +55,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 | `exit` | None |
 
 - `has`: Reports membership; the tree is unchanged.
-- `add`: Inserts a copy of the key. On allocation failure, `add` prints `0`, reports `cbt: fatal: insert failed`, and stops; the tree is unchanged.
+- `add`: Inserts a copy of the key. On allocation failure, `add` prints `0`, reports `cbt: fatal: add: out of memory`, and stops; the tree is unchanged.
 - `rm`: Deletes the key.
 - `clear`: Removes every key.
 - `after`: Finds the first key in byte order that starts with the prefix and prints the bytes after the prefix. A key equal to the prefix gives an empty suffix, printed as an empty record. A prefix no key starts with prints no record, so a caller that needs to tell these cases apart uses `has` or `list`.
@@ -66,7 +66,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 - `write`: Writes the snapshot to standard output.
 - `exit`: Stops `cbt` with status 0 without reading further requests. Output for earlier requests is already written.
 
-An unknown command, a missing space after a command that takes data, or a space after `clear`, `read`, `write`, or `exit` fails with `cbt: fatal: invalid request`.
+An unknown command fails with `cbt: fatal: unknown command`. A command that takes data but lacks the space fails with `cbt: fatal: <command>: missing operand`, and a space after `clear`, `read`, `write`, or `exit` fails with `cbt: fatal: <command>: unexpected operand`.
 
 ### Snapshots
 
@@ -83,17 +83,44 @@ On the first error, `cbt` writes one message to standard error and exits with st
 | Message | Cause |
 | --- | --- |
 | `cbt: fatal: unsupported option` | An argument other than a single `-0` |
-| `cbt: fatal: invalid request` | An unknown command, wrong use of the space, or NUL inside a default-mode request |
 | `cbt: fatal: unterminated request` | Input ends without a final delimiter |
-| `cbt: fatal: insert failed` | `add` ran out of memory |
-| `cbt: fatal: prefix lookup failed` | `after`, `list`, `save`, or `write` ran out of memory |
-| `cbt: fatal: empty key cannot be listed` | `list` would print the empty key |
-| `cbt: fatal: empty key cannot be stored` | `save` or `write` while the tree holds the empty key |
-| `cbt: fatal: load failed` | The file is missing, unreadable, or malformed, or memory ran out |
-| `cbt: fatal: read failed` | The stream snapshot is malformed, lacks its marker, or memory ran out |
-| `cbt: fatal: save failed` | The file cannot be opened or written |
-| `cbt: fatal: output failed` | Standard output cannot be written, including when its reader has closed it |
+| `cbt: fatal: NUL in request` | A NUL byte inside a default-mode request |
+| `cbt: fatal: unknown command` | A request whose command name is not a command |
+| `cbt: fatal: has: missing operand` | `has` without a space and key |
+| `cbt: fatal: add: missing operand` | `add` without a space and key |
+| `cbt: fatal: rm: missing operand` | `rm` without a space and key |
+| `cbt: fatal: after: missing operand` | `after` without a space and prefix |
+| `cbt: fatal: list: missing operand` | `list` without a space and prefix |
+| `cbt: fatal: load: missing operand` | `load` without a space and path |
+| `cbt: fatal: save: missing operand` | `save` without a space and path |
+| `cbt: fatal: clear: unexpected operand` | `clear` followed by a space |
+| `cbt: fatal: read: unexpected operand` | `read` followed by a space |
+| `cbt: fatal: write: unexpected operand` | `write` followed by a space |
+| `cbt: fatal: exit: unexpected operand` | `exit` followed by a space |
 | `cbt: fatal: input failed` | Standard input cannot be read |
+| `cbt: fatal: output failed` | A response cannot be written to standard output, including when its reader has closed it |
+| `cbt: fatal: add: out of memory` | `add` ran out of memory |
+| `cbt: fatal: after: out of memory` | `after` ran out of memory |
+| `cbt: fatal: list: out of memory` | `list` ran out of memory |
+| `cbt: fatal: list: empty key cannot be listed` | `list` would print the empty key |
+| `cbt: fatal: list: output failed` | `list` cannot write its keys to standard output |
+| `cbt: fatal: write: empty key cannot be stored` | `write` while the tree holds the empty key |
+| `cbt: fatal: write: out of memory` | `write` ran out of memory |
+| `cbt: fatal: write: output failed` | `write` cannot write the snapshot to standard output |
+| `cbt: fatal: save: empty key cannot be stored` | `save` while the tree holds the empty key |
+| `cbt: fatal: save: cannot open file` | `save` cannot open or create the file |
+| `cbt: fatal: save: out of memory` | `save` ran out of memory |
+| `cbt: fatal: save: write error` | `save` cannot write or close the file |
+| `cbt: fatal: load: cannot open file` | `load` cannot open the file |
+| `cbt: fatal: load: read error` | `load` cannot read the file |
+| `cbt: fatal: load: malformed record` | The file holds a NUL inside a default-mode record or ends with a record lacking its delimiter, as a snapshot in the other delimiter does |
+| `cbt: fatal: load: missing marker` | The file ends before the empty record, including an empty file |
+| `cbt: fatal: load: data after marker` | The file holds bytes after the empty record |
+| `cbt: fatal: load: out of memory` | `load` ran out of memory |
+| `cbt: fatal: read: read error` | `read` cannot read standard input |
+| `cbt: fatal: read: malformed record` | The stream snapshot holds a NUL inside a default-mode record or ends with a record lacking its delimiter |
+| `cbt: fatal: read: missing marker` | Standard input ends before the snapshot's empty record |
+| `cbt: fatal: read: out of memory` | `read` ran out of memory |
 
 ### Examples
 
@@ -147,7 +174,7 @@ A failure stops the stream and sets the exit status:
 printf 'add a\nbogus\nhas a\n' | tests/prefix/bin/cbt; echo "status $?"
 ```
 
-Standard output holds `2` and `status 1`; standard error holds `cbt: fatal: invalid request`.
+Standard output holds `2` and `status 1`; standard error holds `cbt: fatal: unknown command`.
 
 ## C library
 
