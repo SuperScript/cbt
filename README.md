@@ -34,16 +34,16 @@ Any other argument fails with `cbt: fatal: unsupported option`.
 
 ### Records
 
-Every request and every output record ends with the selected delimiter: LF by default, NUL with `-0`. A request is a command name, one space, and the data, followed by the delimiter. The first space ends the command name; later spaces belong to the data. The commands `clear`, `read`, `write`, and `exit` take no data and no space. An empty operand is a space followed directly by the delimiter, and names the empty key.
+Every request and every output record ends with the selected delimiter: LF by default, NUL with `-0`. A command that takes an operand is sent as `<command> <operand>`: the command name, one space, then the operand up to the delimiter. The first space ends the command name; later spaces belong to the operand, so `add  a` adds the key ` a`. A request with no space has no operand. A space followed directly by the delimiter gives the empty operand, which names the empty key. The commands `clear`, `read`, `write`, and `exit` take no operand and are sent as the command name alone.
 
-Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control bytes have no special meaning. NUL cannot occur in a key. In default mode, LF ends a record and cannot occur inside a key, and a NUL byte inside a request fails. A final request without its delimiter fails.
+Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control bytes have no special meaning. NUL cannot occur in a key. In default mode, LF ends a record and cannot occur inside a key, and a NUL byte inside a request is a fatal error: `cbt: fatal: NUL in request`. A final request without its delimiter is a fatal error: `cbt: fatal: unterminated request`.
 
 ### Commands
 
 | Request | Output |
 | --- | --- |
 | `has <key>` | `1` if the key is present, `0` if absent |
-| `add <key>` | `2` if added, `1` if already present, `0` on allocation failure, followed by an error |
+| `add <key>` | `2` if added, `1` if already present, `0` if out of memory, a fatal error |
 | `rm <key>` | `1` if deleted, `0` if absent |
 | `clear` | None |
 | `after <prefix>` | The suffix of the first matching key, or nothing when no key matches |
@@ -60,19 +60,19 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 - `clear`: Removes every key.
 - `after`: Finds the first key in byte order that starts with the prefix and prints the bytes after the prefix. A key equal to the prefix gives an empty suffix, printed as an empty record. A prefix no key starts with prints no record, so a caller that needs to tell these cases apart uses `has` or `list`.
 - `list`: Prints the full keys that start with the prefix. The empty prefix matches every key. Because the empty record ends the list, `list` fails before printing when its results include the empty key.
-- `load`: Reads the snapshot file at the path, which is the rest of the request and may contain spaces. See [Snapshots](#snapshots).
+- `load`: Reads the snapshot file at the path. See [Snapshots](#snapshots).
 - `save`: Writes the snapshot to the named file.
 - `read`: Reads a snapshot from standard input up to its empty record, then resumes reading requests.
 - `write`: Writes the snapshot to standard output.
 - `exit`: Stops `cbt` with status 0 without reading further requests. Output for earlier requests is already written.
 
-An unknown command fails with `cbt: fatal: unknown command`. A command that takes data but lacks the space fails with `cbt: fatal: <command>: missing operand`, and a space after `clear`, `read`, `write`, or `exit` fails with `cbt: fatal: <command>: unexpected operand`.
+An unknown command fails with `cbt: fatal: unknown command`. A command that takes an operand, sent with none, is a fatal error: `cbt: fatal: <command>: missing operand`. A command that takes no operand, sent with one, even an empty one, is a fatal error: `cbt: fatal: <command>: unexpected operand`.
 
 ### Snapshots
 
 A snapshot is raw keys, each ending with the selected delimiter, followed by one empty record. The `save` and `write` commands emit the keys sorted by byte order, the same format as the output from `list`. The `load` and `read` commands accept keys in any order and add a repeated key once. The empty record is the end marker, so an empty tree's snapshot is the marker alone, and a tree holding the empty key cannot be stored. In `-0` mode, LF may occur inside a key. Backslashes and escape text are literal bytes.
 
-The `load` and `read` commands add the snapshot's keys to the current tree. Keys already present, including keys the snapshot lacks, stay in place. A snapshot that fails to load, because it is malformed or memory runs out, leaves the tree as it was. A file `load` rejects an empty file, a missing marker, and bytes after the marker. A nonempty snapshot written with the other delimiter is rejected.
+The `load` and `read` commands add the snapshot's keys to the current tree. Keys already present, including keys the snapshot lacks, stay in place. A snapshot that fails to load, because it is malformed or memory runs out, leaves the tree as it was. The `load` command rejects a file that is empty, lacks the end marker, or holds bytes after it. A nonempty snapshot written with the other delimiter is rejected.
 
 The `save` and `write` commands fail before opening the file or writing output when the tree holds the empty key. The `save` command writes the named file in place: it truncates the file, then writes the snapshot, and a save through a symlink writes the symlink's target. A failed save can leave the file empty or partial. Changes in memory are durable only after a `save` succeeds.
 
@@ -86,17 +86,17 @@ On the first error, `cbt` writes one message to standard error and exits with st
 | `cbt: fatal: unterminated request` | Input ends without a final delimiter |
 | `cbt: fatal: NUL in request` | A NUL byte inside a default-mode request |
 | `cbt: fatal: unknown command` | A request whose command name is not a command |
-| `cbt: fatal: has: missing operand` | `has` without a space and key |
-| `cbt: fatal: add: missing operand` | `add` without a space and key |
-| `cbt: fatal: rm: missing operand` | `rm` without a space and key |
-| `cbt: fatal: after: missing operand` | `after` without a space and prefix |
-| `cbt: fatal: list: missing operand` | `list` without a space and prefix |
-| `cbt: fatal: load: missing operand` | `load` without a space and path |
-| `cbt: fatal: save: missing operand` | `save` without a space and path |
-| `cbt: fatal: clear: unexpected operand` | `clear` followed by a space |
-| `cbt: fatal: read: unexpected operand` | `read` followed by a space |
-| `cbt: fatal: write: unexpected operand` | `write` followed by a space |
-| `cbt: fatal: exit: unexpected operand` | `exit` followed by a space |
+| `cbt: fatal: has: missing operand` | `has` with no operand |
+| `cbt: fatal: add: missing operand` | `add` with no operand |
+| `cbt: fatal: rm: missing operand` | `rm` with no operand |
+| `cbt: fatal: after: missing operand` | `after` with no operand |
+| `cbt: fatal: list: missing operand` | `list` with no operand |
+| `cbt: fatal: load: missing operand` | `load` with no operand |
+| `cbt: fatal: save: missing operand` | `save` with no operand |
+| `cbt: fatal: clear: unexpected operand` | `clear` with an operand, even an empty one |
+| `cbt: fatal: read: unexpected operand` | `read` with an operand, even an empty one |
+| `cbt: fatal: write: unexpected operand` | `write` with an operand, even an empty one |
+| `cbt: fatal: exit: unexpected operand` | `exit` with an operand, even an empty one |
 | `cbt: fatal: input failed` | Standard input cannot be read |
 | `cbt: fatal: output failed` | A response cannot be written to standard output, including when its reader has closed it |
 | `cbt: fatal: add: out of memory` | `add` ran out of memory |

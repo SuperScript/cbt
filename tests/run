@@ -705,7 +705,7 @@ _hex < "${basedir}/nul-output"
 _run cbt-exit-open-input
 _exchange '' 'add a\n' 'exit\n'
 
-_run cbt-exit-data
+_run cbt-exit-operand
 _cbt_installed 'exit x'
 
 _run cbt-exit-space
