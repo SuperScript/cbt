@@ -77,6 +77,29 @@ _exchange() {
   rm -f "${in}" "${out}"
 }
 
+# _make_stubs dir
+#   Copy the Makefile into dir beside empty, equally old stand-ins for the
+#   sources, headers, objects, library, and cbt.
+_make_stubs() {
+  local dir="$1"
+  local path
+  local name
+
+  mkdir -p "${dir}"
+  cp Makefile "${dir}/Makefile"
+  for path in "${home}"/*.c "${home}"/*.h
+  do
+    name="${path##*/}"
+    : > "${dir}/${name}"
+    case "${name}" in
+      (*.c) : > "${dir}/${name%.c}.o";;
+    esac
+  done
+  : > "${dir}/libcritbit0.a"
+  : > "${dir}/cbt"
+  touch -t 200001010000 "${dir}"/*
+}
+
 ####
 
 rm -rf "${basedir:?}/"*
@@ -672,21 +695,9 @@ printf 'b\na\nb\n\n' > "${basedir}/unordered"
 _cbt 'load tests/basedir/unordered' 'write'
 
 _run make-header-dependencies
-mkdir -p "${basedir}/make"
-cp Makefile "${basedir}/make/Makefile"
+_make_stubs "${basedir}/make"
 (
   cd "${basedir}/make" || exit 1
-  for path in "${home}"/*.c "${home}"/*.h
-  do
-    name="${path##*/}"
-    : > "${name}"
-    case "${name}" in
-      (*.c) : > "${name%.c}.o";;
-    esac
-  done
-  : > libcritbit0.a
-  : > cbt
-  touch -t 200001010000 *
   for header in critbit0.h str0.h limitmalloc.h int64.h uint8.h uint32.h uint64.h
   do
     touch -t 200001020000 "${header}"
@@ -697,4 +708,44 @@ cp Makefile "${basedir}/make/Makefile"
     done
     touch -t 200001010000 "${header}"
   done
+)
+
+_run make-clean
+mkdir -p "${basedir}/make-clean/tests/basedir/sub"
+cp Makefile "${basedir}/make-clean/Makefile"
+(
+  cd "${basedir}/make-clean" || exit 1
+  : > tests/output
+  : > tests/basedir/sub/file
+  "${MAKE:-make}" clean > /dev/null 2>&1
+  echo "$?"
+  ls tests
+)
+
+_run make-failed-cbt-leaves-no-temp
+_make_stubs "${basedir}/make-cbt"
+(
+  cd "${basedir}/make-cbt" || exit 1
+  touch -t 200001020000 cbt.c
+  if "${MAKE:-make}" CC=false cbt > /dev/null 2>&1
+  then
+    echo built
+  else
+    echo failed
+  fi
+  ls | grep '^cbt'
+)
+
+_run make-failed-library-leaves-no-temp
+_make_stubs "${basedir}/make-library"
+(
+  cd "${basedir}/make-library" || exit 1
+  touch -t 200001020000 critbit0_insert.o
+  if "${MAKE:-make}" AR=false libcritbit0.a > /dev/null 2>&1
+  then
+    echo built
+  else
+    echo failed
+  fi
+  ls | grep '^libcritbit0'
 )

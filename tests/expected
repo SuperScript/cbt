@@ -880,3 +880,22 @@ uint64.h critbit0_insert.o 1
 uint64.h str0_free.o 1
 uint64.h limitmalloc_open.o 0
 uint64.h cbt 1
+
+
+==== make-clean ====
+
+0
+
+
+==== make-failed-cbt-leaves-no-temp ====
+
+failed
+cbt
+cbt.c
+cbt.o
+
+
+==== make-failed-library-leaves-no-temp ====
+
+failed
+libcritbit0.a

@@ -40,8 +40,7 @@ $(_NEEDVAR_TARGETS):
 .PHONY: clean
 clean:
 	@rm -f tests/output
-	@rm -rf tests/basedir/"*"
-	@rmdir tests/basedir 2>/dev/null; true
+	@rm -rf tests/basedir
 
 #_# test
 #_#   Run test suite and diff with expected results
@@ -64,15 +63,16 @@ install: libcritbit0.a cbt
 	@for header in $(PUBLIC_HEADERS); do cp "$$header" "$(PREFIX)/include/$$header" || exit 1; done
 
 libcritbit0.a: $(LIB_OBJECTS)
-	@temp="$$(mktemp -d "$@.XXXXXX")" && \
+	@temp="$$(mktemp -d "$@.XXXXXX")" || exit 1; \
 	  $(AR) rcs "$$temp/libcritbit0.a" $(LIB_OBJECTS) && \
-	  mv "$$temp/libcritbit0.a" "$@" && \
-	  rmdir "$$temp"
+	  mv "$$temp/libcritbit0.a" "$@"; \
+	  status=$$?; rm -rf "$$temp"; exit "$$status"
 
 cbt: cbt.c libcritbit0.a $(CRITBIT0_HEADERS)
-	@temp="$$(mktemp "$@.XXXXXX")" && \
+	@temp="$$(mktemp "$@.XXXXXX")" || exit 1; \
 	  $(CC) -I. -o "$$temp" cbt.c libcritbit0.a && \
-	  mv "$$temp" "$@"
+	  mv "$$temp" "$@"; \
+	  status=$$?; rm -f "$$temp"; exit "$$status"
 
 critbit0_contains.o critbit0_insert.o critbit0_delete.o critbit0_clear.o critbit0_firstprefixed.o critbit0_allprefixed.o: $(CRITBIT0_HEADERS)
 str0_length.o str0_equalc.o str0_copyc.o str0_free.o: $(STR0_HEADERS)
