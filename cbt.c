@@ -3,9 +3,12 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "critbit0.h"
 
@@ -16,6 +19,10 @@ static FILE *snapshot_output;
 static FILE *dump_output;
 static int raw_stream;
 static int terminator = '\n';
+static int mapped;
+static const char *map;
+static int64 map_length;
+static critbit0_image image;
 
 static void response(const char *message)
 {
@@ -30,6 +37,29 @@ static int fail(const char *command, const char *message)
   fprintf(stderr, "cbt: fatal: %s%s%s\n", command ? command : "",
           command ? ": " : "", message);
   return 1;
+}
+
+/* In -m mode, search the mapped dump instead of the tree. */
+static int contains(critbit0_tree *tree, str0 *key)
+{
+  if (mapped) return critbit0_image_contains(&image, key);
+  return critbit0_contains(tree, key);
+}
+
+static int firstprefixed(critbit0_tree *tree, limitmalloc_pool *pool,
+                         str0 *prefix)
+{
+  if (mapped)
+    return critbit0_image_firstprefixed(&image, pool, &suffix, prefix);
+  return critbit0_firstprefixed(tree, pool, &suffix, prefix);
+}
+
+static int allprefixed(critbit0_tree *tree, limitmalloc_pool *pool,
+                       str0 *prefix, int (*handle)(void))
+{
+  if (mapped)
+    return critbit0_image_allprefixed(&image, pool, &suffix, prefix, handle);
+  return critbit0_allprefixed(tree, pool, &suffix, prefix, handle);
 }
 
 static int save_key(void)
@@ -203,15 +233,17 @@ static int save_snapshot(const char *path, critbit0_tree *tree,
   int result;
   int ok = 1;
 
-  if (critbit0_contains(tree, &empty))
-    return fail("save", "empty key cannot be stored");
+  result = contains(tree, &empty);
+  if (result < 0) return fail("save", "malformed dump");
+  if (result) return fail("save", "empty key cannot be stored");
   output = fopen(path, "w");
   if (!output) return fail("save", "cannot open file");
   snapshot_output = output;
-  result = critbit0_allprefixed(tree, pool, &suffix, &prefix, save_key);
+  result = allprefixed(tree, pool, &prefix, save_key);
   str0_free(&suffix, pool);
   if (result < 0) {
     fclose(output);
+    if (result == -2) return fail("save", "malformed dump");
     return fail("save", "out of memory");
   }
   if (result != 1 || ferror(output)) ok = 0;
@@ -227,11 +259,13 @@ static int write_snapshot(critbit0_tree *tree, limitmalloc_pool *pool)
   str0 prefix = "";
   int result;
 
-  if (critbit0_contains(tree, &empty))
-    return fail("write", "empty key cannot be stored");
+  result = contains(tree, &empty);
+  if (result < 0) return fail("write", "malformed dump");
+  if (result) return fail("write", "empty key cannot be stored");
   snapshot_output = stdout;
-  result = critbit0_allprefixed(tree, pool, &suffix, &prefix, save_key);
+  result = allprefixed(tree, pool, &prefix, save_key);
   str0_free(&suffix, pool);
+  if (result == -2) return fail("write", "malformed dump");
   if (result < 0) return fail("write", "out of memory");
   if (result != 1 || ferror(stdout)) return fail("write", "output failed");
   if (fputc(terminator, stdout) == EOF) return fail("write", "output failed");
@@ -258,7 +292,8 @@ static int dump_tree(const char *path, critbit0_tree *tree)
     close(fd);
     return fail("dump", "cannot open file");
   }
-  if (!critbit0_dump(tree, dump_put) || fflush(dump_output) == EOF ||
+  if (!(mapped ? dump_put(map, map_length) : critbit0_dump(tree, dump_put)) ||
+      fflush(dump_output) == EOF ||
       fsync(fd) == -1) failure = "write error";
   if (fclose(dump_output) == EOF && !failure) failure = "write error";
   if (failure) return fail("dump", failure);
@@ -294,8 +329,11 @@ static int command_has(char *operand, critbit0_tree *tree,
 {
   str0 key = operand;
 
+  int result = contains(tree, &key);
+
   (void) pool;
-  response(critbit0_contains(tree, &key) ? "1" : "0");
+  if (result < 0) return fail("has", "malformed dump");
+  response(result ? "1" : "0");
   return 0;
 }
 
@@ -326,7 +364,8 @@ static int command_after(char *operand, critbit0_tree *tree,
   int result;
 
   errno = 0;
-  result = critbit0_firstprefixed(tree, pool, &suffix, &key);
+  result = firstprefixed(tree, pool, &key);
+  if (result < 0) return fail("after", "malformed dump");
   if (!result && errno) return fail("after", "out of memory");
   if (result) {
     response(suffix);
@@ -341,11 +380,15 @@ static int command_list(char *operand, critbit0_tree *tree,
   str0 key = operand;
   int result;
 
-  if (!*key && critbit0_contains(tree, &key))
-    return fail("list", "empty key cannot be listed");
+  if (!*key) {
+    result = contains(tree, &key);
+    if (result < 0) return fail("list", "malformed dump");
+    if (result) return fail("list", "empty key cannot be listed");
+  }
   match_prefix = key;
-  result = critbit0_allprefixed(tree, pool, &suffix, &key, match);
+  result = allprefixed(tree, pool, &key, match);
   str0_free(&suffix, pool);
+  if (result == -2) return fail("list", "malformed dump");
   if (result < 0) return fail("list", "out of memory");
   if (output_failed || result == 0) return fail("list", "output failed");
   response("");
@@ -358,8 +401,9 @@ static int command_complete(char *operand, critbit0_tree *tree,
   str0 key = operand;
   int result;
 
-  result = critbit0_allprefixed(tree, pool, &suffix, &key, extension);
+  result = allprefixed(tree, pool, &key, extension);
   str0_free(&suffix, pool);
+  if (result == -2) return fail("complete", "malformed dump");
   if (result < 0) return fail("complete", "out of memory");
   if (output_failed || result == 0)
     return fail("complete", "output failed");
@@ -420,22 +464,23 @@ static int command_exit(char *operand, critbit0_tree *tree,
 static const struct command {
   const char *name;
   int takes_operand;
+  int changes_tree;
   int (*run)(char *, critbit0_tree *, limitmalloc_pool *);
 } commands[] = {
-  { "has", 1, command_has },
-  { "add", 1, command_add },
-  { "rm", 1, command_rm },
-  { "after", 1, command_after },
-  { "list", 1, command_list },
-  { "complete", 1, command_complete },
-  { "load", 1, command_load },
-  { "save", 1, command_save },
-  { "dump", 1, command_dump },
-  { "clear", 0, command_clear },
-  { "read", 0, command_read },
-  { "write", 0, command_write },
-  { "exit", 0, command_exit },
-  { 0, 0, 0 }
+  { "has", 1, 0, command_has },
+  { "add", 1, 1, command_add },
+  { "rm", 1, 1, command_rm },
+  { "after", 1, 0, command_after },
+  { "list", 1, 0, command_list },
+  { "complete", 1, 0, command_complete },
+  { "load", 1, 1, command_load },
+  { "save", 1, 0, command_save },
+  { "dump", 1, 0, command_dump },
+  { "clear", 0, 1, command_clear },
+  { "read", 0, 1, command_read },
+  { "write", 0, 0, command_write },
+  { "exit", 0, 0, command_exit },
+  { 0, 0, 0, 0 }
 };
 
 /* Return 0 to continue, 1 after reporting a failure, or -1 to exit. */
@@ -452,25 +497,75 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
     return fail(command->name, "missing operand");
   if (!command->takes_operand && operand)
     return fail(command->name, "unexpected operand");
+  if (mapped && command->changes_tree)
+    return fail(command->name, "read-only tree");
   return command->run(operand, tree, pool);
+}
+
+/* Map the dump at path read-only and search it in place, as tinycdb's
+   cdb_init maps a cdb file. */
+static int map_dump(const char *path)
+{
+  struct stat status;
+  void *bytes;
+  int fd;
+
+  fd = open(path, O_RDONLY);
+  if (fd == -1) return fail("-m", "cannot open file");
+  if (fstat(fd, &status) == -1) {
+    close(fd);
+    return fail("-m", "cannot map file");
+  }
+  if (!S_ISREG(status.st_mode)) {
+    close(fd);
+    return fail("-m", "cannot open file");
+  }
+  if (status.st_size < 32) {
+    close(fd);
+    return fail("-m", "malformed dump");
+  }
+  if ((uintmax_t) status.st_size > SIZE_MAX) {
+    close(fd);
+    return fail("-m", "cannot map file");
+  }
+  bytes = mmap(0, (size_t) status.st_size, PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  if (bytes == MAP_FAILED) return fail("-m", "cannot map file");
+  map = bytes;
+  map_length = status.st_size;
+  if (!critbit0_image_init(&image, map, map_length))
+    return fail("-m", "malformed dump");
+  mapped = 1;
+  return 0;
 }
 
 int main(int argc, char **argv)
 {
   critbit0_tree tree = { 0 };
   limitmalloc_pool pool = { LIMITMALLOC_MAX, 0, 0 };
+  const char *dump_path = 0;
   char *line = 0;
   size_t capacity = 0;
   ssize_t length;
   int status = 0;
+  int option;
 
-  if (argc == 1) {
-    raw_stream = 0;
-    terminator = '\n';
-  } else if (argc == 2 && strcmp(argv[1], "-0") == 0) {
-    raw_stream = 1;
-    terminator = 0;
-  } else return fail(0, "unsupported option");
+  while ((option = getopt(argc, argv, ":0m:")) != -1)
+    switch (option) {
+      case '0':
+        if (raw_stream) return fail(0, "unsupported option");
+        raw_stream = 1;
+        terminator = 0;
+        break;
+      case 'm':
+        if (dump_path) return fail(0, "unsupported option");
+        dump_path = optarg;
+        break;
+      default:
+        return fail(0, "unsupported option");
+    }
+  if (optind != argc) return fail(0, "unsupported option");
+  if (dump_path && map_dump(dump_path)) return 1;
   signal(SIGPIPE, SIG_IGN);
 
   while ((length = getdelim(&line, &capacity, terminator, stdin)) != -1) {

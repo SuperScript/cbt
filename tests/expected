@@ -1122,6 +1122,246 @@ stop at 6: result 0, calls 6
 0
 
 
+==== critbit0-image-operations ====
+
+init short: 0
+init length mismatch: 0
+init magic: 0
+init version: 0
+init unaligned root: 0
+init root past end: 0
+init root in header: 0
+init root node too short: 0
+init: 1
+contains [a]: tree 1, image 1
+contains [ca]: tree 1, image 1
+contains [cb]: tree 1, image 1
+contains [c]: tree 0, image 0
+contains []: tree 0, image 0
+contains [x]: tree 0, image 0
+contains [cab]: tree 0, image 0
+firstprefixed [a]: 1 []
+firstprefixed [ca]: 1 []
+firstprefixed [cb]: 1 []
+firstprefixed [c]: 1 [a]
+firstprefixed []: 1 [a]
+firstprefixed [x]: 0
+firstprefixed [cab]: 0
+allprefixed [c]:
+  [a]
+  [b]
+  result 1
+allprefixed [] stop at 2:
+  [a]
+  [ca]
+  result 0
+allprefixed [] null callback: 0 [a]
+allprefixed [x]: 1
+firstprefixed out of memory: 0, ENOMEM 1
+allprefixed out of memory: -1
+unterminated key: contains -1, firstprefixed -1, allprefixed -2
+child 0 unaligned: contains -1, firstprefixed -1, allprefixed -2
+child 0 in header: contains -1, firstprefixed -1, allprefixed -2
+child 0 node in header: contains -1, firstprefixed -1, allprefixed -2
+child 1 node too short: contains -1, firstprefixed -1, allprefixed -2
+walk reaches damaged cb:
+  [a]
+  [ca]
+  result -2
+0
+
+
+==== cbt-mmap-lf ====
+
+1
+0
+a
+ca
+cb
+
+a
+b
+
+a
+ca
+cb
+
+0
+
+
+==== cbt-mmap-nul ====
+
+0
+310063610063620000
+0
+310063610063620000
+0
+3100
+
+
+==== cbt-mmap-dump ====
+
+0
+0
+
+
+==== cbt-mmap-dump-same-path ====
+
+a
+ca
+cb
+
+0
+a
+ca
+cb
+
+0
+
+
+==== cbt-mmap-save ====
+
+0
+a
+ca
+cb
+
+
+
+==== cbt-mmap-read-only ====
+
+cbt: fatal: add: read-only tree
+1
+cbt: fatal: rm: read-only tree
+1
+cbt: fatal: clear: read-only tree
+1
+cbt: fatal: load: read-only tree
+1
+cbt: fatal: read: read-only tree
+1
+cbt: fatal: read: read-only tree
+1
+
+
+==== cbt-mmap-request-checks-first ====
+
+cbt: fatal: add: missing operand
+1
+cbt: fatal: clear: unexpected operand
+1
+
+
+==== cbt-mmap-empty-tree ====
+
+0
+
+
+
+0
+
+
+==== cbt-mmap-empty-key ====
+
+1
+0
+
+
+0
+cbt: fatal: list: empty key cannot be listed
+1
+cbt: fatal: write: empty key cannot be stored
+1
+
+
+==== cbt-mmap-options ====
+
+cbt: fatal: unsupported option
+1
+cbt: fatal: unsupported option
+1
+cbt: fatal: unsupported option
+1
+cbt: fatal: unsupported option
+1
+cbt: fatal: unsupported option
+1
+cbt: fatal: unsupported option
+1
+cbt: fatal: unsupported option
+1
+
+
+==== cbt-mmap-cannot-open ====
+
+cbt: fatal: -m: cannot open file
+1
+cbt: fatal: -m: cannot open file
+1
+
+
+==== cbt-mmap-malformed-header ====
+
+cbt: fatal: -m: malformed dump
+1
+cbt: fatal: -m: malformed dump
+1
+cbt: fatal: -m: malformed dump
+1
+cbt: fatal: -m: malformed dump
+1
+cbt: fatal: -m: malformed dump
+1
+
+
+==== cbt-mmap-malformed-record ====
+
+cbt: fatal: has: malformed dump
+1
+cbt: fatal: after: malformed dump
+1
+cbt: fatal: list: malformed dump
+1
+cbt: fatal: complete: malformed dump
+1
+cbt: fatal: save: malformed dump
+1
+cbt: fatal: write: malformed dump
+1
+1
+b
+
+0
+
+
+==== cbt-mmap-malformed-record-after-output ====
+
+1
+1
+0
+a
+ca
+cbt: fatal: complete: malformed dump
+1
+ca
+cbt: fatal: list: malformed dump
+1
+cbt: fatal: save: malformed dump
+1
+a
+ca
+a
+ca
+cbt: fatal: write: malformed dump
+1
+
+
+==== cbt-mmap-cannot-map ====
+
+cbt: fatal: -m: cannot map file
+1
+
+
 ==== make-header-dependencies ====
 
 critbit0.h critbit0_insert.o 1

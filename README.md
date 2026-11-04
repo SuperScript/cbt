@@ -21,16 +21,17 @@ Run `make install PREFIX=/path/to/prefix` to install `libcritbit0.a` in `PREFIX/
 ### Synopsis
 
 ```text
-cbt [-0]
+cbt [-0] [-m file]
 ```
 
-The `cbt` program keeps one crit-bit tree in memory for the life of the process. It reads requests from standard input, writes results to standard output, and writes errors to standard error. It writes each request's output before reading the next request, so another program can keep it running and exchange one request and response at a time. The tree starts empty and is discarded at exit; `save`, `write`, and `dump` keep a copy.
+The `cbt` program keeps one crit-bit tree in memory for the life of the process. It reads requests from standard input, writes results to standard output, and writes errors to standard error. It writes each request's output before reading the next request, so another program can keep it running and exchange one request and response at a time. The tree starts empty, or as the dump named by `-m`, and is discarded at exit; `save`, `write`, and `dump` keep a copy.
 
 ### Options
 
 - `-0`: End every request, response, and snapshot record with NUL instead of LF. Keys may then contain LF.
+- `-m file`: Map the file, written by `dump`, read-only with `mmap` and answer requests from its bytes in place, without building a tree. See [Read-only mode](#read-only-mode).
 
-Any other argument fails with `cbt: fatal: unsupported option`.
+The options combine in either order. A repeated or unknown option, `-m` without a file, or any other argument fails with `cbt: fatal: unsupported option`.
 
 ### Records
 
@@ -72,6 +73,14 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 
 An unknown command fails with `cbt: fatal: unknown command`. A command that takes an operand, sent with none, is a fatal error: `cbt: fatal: <command>: missing operand`. A command that takes no operand, sent with one, even an empty one, is a fatal error: `cbt: fatal: <command>: unexpected operand`.
 
+### Read-only mode
+
+With `-m file`, `cbt` searches the mapped dump instead of an in-memory tree. The commands `has`, `after`, `list`, `complete`, `save`, `write`, `dump`, and `exit` work as described above; `dump` writes the mapped bytes unchanged. The commands that change the tree, `add`, `rm`, `clear`, `load`, and `read`, fail with `cbt: fatal: <command>: read-only tree`.
+
+At startup, `cbt` checks that the file is a regular file of at least 32 bytes whose header holds the magic, version 1, the file's own length, and a root reference to an 8-aligned record inside the file. Each search then checks every record it reaches: a child lies after the header and ends before its parent, and a key's NUL lies before its parent. A search that meets a bad record fails with `cbt: fatal: <command>: malformed dump`, after any output already written for that request.
+
+The file must not change in place while `cbt` has it mapped. The `dump` command replaces a file by unlinking it, so dumping to the mapped path leaves the mapped bytes intact.
+
 ### Snapshots
 
 A snapshot is raw keys, each ending with the selected delimiter, followed by one empty record. The `save` and `write` commands emit the keys sorted by byte order, the same format as the output from `list`. The `load` and `read` commands accept keys in any order and add a repeated key once. The empty record is the end marker, so an empty tree's snapshot is the marker alone, and a tree holding the empty key cannot be stored. In `-0` mode, LF may occur inside a key. Backslashes and escape text are literal bytes.
@@ -103,7 +112,10 @@ On the first error, `cbt` writes one message to standard error and exits with st
 
 | Message | Cause |
 | --- | --- |
-| `cbt: fatal: unsupported option` | An argument other than a single `-0` |
+| `cbt: fatal: unsupported option` | A repeated or unknown option, `-m` without a file, or any other argument |
+| `cbt: fatal: -m: cannot open file` | The `-m` file cannot be opened or is not a regular file |
+| `cbt: fatal: -m: cannot map file` | The `-m` file cannot be examined with `fstat`, is too large to map, or `mmap` fails |
+| `cbt: fatal: -m: malformed dump` | The `-m` file is shorter than 32 bytes or its header is not a version 1 dump header matching the file |
 | `cbt: fatal: unterminated request` | Input ends without a final delimiter |
 | `cbt: fatal: NUL in request` | A NUL byte inside a default-mode request |
 | `cbt: fatal: unknown command` | A request whose command name is not a command |
@@ -148,6 +160,17 @@ On the first error, `cbt` writes one message to standard error and exits with st
 | `cbt: fatal: read: malformed record` | The stream snapshot holds a NUL inside a default-mode record or ends with a record lacking its delimiter |
 | `cbt: fatal: read: missing marker` | Standard input ends before the snapshot's empty record |
 | `cbt: fatal: read: out of memory` | `read` ran out of memory |
+| `cbt: fatal: add: read-only tree` | `add` under `-m` |
+| `cbt: fatal: rm: read-only tree` | `rm` under `-m` |
+| `cbt: fatal: clear: read-only tree` | `clear` under `-m` |
+| `cbt: fatal: load: read-only tree` | `load` under `-m` |
+| `cbt: fatal: read: read-only tree` | `read` under `-m` |
+| `cbt: fatal: has: malformed dump` | `has` meets a bad record in the `-m` file |
+| `cbt: fatal: after: malformed dump` | `after` meets a bad record in the `-m` file |
+| `cbt: fatal: list: malformed dump` | `list` meets a bad record in the `-m` file |
+| `cbt: fatal: complete: malformed dump` | `complete` meets a bad record in the `-m` file |
+| `cbt: fatal: save: malformed dump` | `save` meets a bad record in the `-m` file |
+| `cbt: fatal: write: malformed dump` | `write` meets a bad record in the `-m` file |
 
 ### Examples
 
@@ -195,6 +218,15 @@ printf 'add A\nB\000after A\000' | tests/prefix/bin/cbt -0 | od -An -tx1
 
 The output is `32 00 0a 42 00`: `2`, then the suffix LF `B`.
 
+Dump a tree, then answer requests from the dump in read-only mode:
+
+```sh
+printf 'add ca\nadd cb\nadd a\ndump tests/prefix/m.dump\n' | tests/prefix/bin/cbt
+printf 'has ca\nlist c\nadd x\n' | tests/prefix/bin/cbt -m tests/prefix/m.dump
+```
+
+The first command prints `2`, `2`, `2`. The second prints `1`, `ca`, `cb`, and an empty record, then writes `cbt: fatal: add: read-only tree` to standard error and exits with status 1.
+
 A failure stops the stream and sets the exit status:
 
 ```sh
@@ -218,10 +250,16 @@ The operations and their results are:
 | `critbit0_firstprefixed` | `1` and one suffix after the prefix, or `0` if absent or allocation fails; `errno` distinguishes allocation failure |
 | `critbit0_allprefixed` | Visits suffixes in tree order; `1` after all matches, `0` if the callback stops, `-1` on suffix allocation failure |
 | `critbit0_dump` | Passes the tree's [dump](#dumps) image, in order, to a callback; `1` after the whole image, `0` if the callback stops |
+| `critbit0_image_init` | Sets up a `critbit0_image` over dump bytes the caller holds; `1` when the header is valid for the given length, `0` otherwise |
+| `critbit0_image_contains` | As `critbit0_contains` on the image; `-1` on a malformed record |
+| `critbit0_image_firstprefixed` | As `critbit0_firstprefixed` on the image; `-1` on a malformed record |
+| `critbit0_image_allprefixed` | As `critbit0_allprefixed` on the image; `-2` on a malformed record, after any callbacks for earlier matches |
 
 The `allprefixed` callback takes no arguments. It can read the suffix through caller-managed state and returns `1` to continue or `0` to stop. A null callback stops after the first match. The result buffer belongs to the caller after either prefix operation; see `critbit0.h` for its state on failure.
 
 The `critbit0_dump` callback takes a pointer to bytes and their count as an `int64`, and returns `1` to continue or `0` to stop. The function allocates nothing and needs no pool.
+
+The `critbit0_image_*` functions search a dump image in place and do no I/O: the caller reads or maps the bytes, which must stay unchanged while in use, and passes them with their length to `critbit0_image_init`. The init call checks only the header and root reference; each lookup checks every record it reaches, so a lookup on a damaged image ends with a malformed result instead of reading outside the bytes. Prefix results are allocated from the pool as for the tree functions.
 
 Save this example as `example.c` in the repository root:
 

@@ -3,6 +3,7 @@
 
 #include "str0.h"
 #include "uint32.h"
+#include "uint64.h"
 #include "uint8.h"
 #include "limitmalloc.h"
 
@@ -50,5 +51,28 @@ extern int critbit0_allprefixed(critbit0_tree *,limitmalloc_pool *,str0 *,str0 *
    "critbit0", then little-endian uint64 version 1, total length, and root
    reference) followed by records in postorder; README.md gives the layout. */
 extern int critbit0_dump(critbit0_tree *,int (*)(const char *,int64));
+
+/* A dump image searched in place. The caller owns the bytes, which must
+   stay unchanged while the image is in use. */
+typedef struct {
+  const char *critbit0_private_bytes;
+  int64 critbit0_private_length;
+  uint64 critbit0_private_root;
+} critbit0_image;
+
+/* Return 1 and set up the image when the bytes start with a version 1 dump
+   header whose total length equals the given length and whose root
+   reference is 0 or names an 8-aligned record inside the bytes; otherwise
+   return 0. Later records are checked as each lookup reaches them. */
+extern int critbit0_image_init(critbit0_image *,const char *,int64);
+/* As critbit0_contains; return -1 when the lookup meets a malformed
+   record. */
+extern int critbit0_image_contains(critbit0_image *,str0 *);
+/* As critbit0_firstprefixed; return -1 when the lookup meets a malformed
+   record. */
+extern int critbit0_image_firstprefixed(critbit0_image *,limitmalloc_pool *,str0 *,str0 *);
+/* As critbit0_allprefixed; return -2 when the walk meets a malformed
+   record, after any callbacks for earlier matches. */
+extern int critbit0_image_allprefixed(critbit0_image *,limitmalloc_pool *,str0 *,str0 *,int (*)(void));
 
 #endif

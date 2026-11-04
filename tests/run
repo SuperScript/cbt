@@ -77,6 +77,34 @@ _exchange() {
   rm -f "${in}" "${out}"
 }
 
+# _cbt_mapped dump request...
+#   Send each request, LF-ended, to installed cbt searching dump through -m.
+_cbt_mapped() {
+  local dump="$1"
+  shift
+  { printf '%s\n' "$@" | "${home}/tests/prefix/bin/cbt" -m "${dump}" 2>&1; echo "$?"; } | _sanitize
+}
+
+# _cbt_arguments argument...
+#   Run installed cbt with the arguments and no requests.
+_cbt_arguments() {
+  { "${home}/tests/prefix/bin/cbt" "$@" < /dev/null 2>&1; echo "$?"; } | _sanitize
+}
+
+# _dump file key...
+#   Write a dump of the given keys to file with installed cbt.
+_dump() {
+  local file="$1"
+  shift
+  {
+    if test $# -gt 0
+    then
+      printf 'add %s\n' "$@"
+    fi
+    printf 'dump %s\n' "${file}"
+  } | "${home}/tests/prefix/bin/cbt" > /dev/null
+}
+
 # _make_stubs dir
 #   Copy the Makefile into dir beside empty, equally old stand-ins for the
 #   sources, headers, library objects, library, and cbt.
@@ -949,6 +977,341 @@ then
   exit 1
 fi
 _check "${basedir}/critbit0_dump_stop"
+
+_run critbit0-image-operations
+cat > "${basedir}/critbit0_image_operations.c" <<'EOF'
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <critbit0.h>
+
+static char bytes[4096];
+static char damaged[4096];
+static int64 length;
+static str0 suffix;
+static int calls;
+static int stop_at;
+
+static int put(const char *data, int64 n)
+{
+  memcpy(bytes + length, data, (size_t) n);
+  length += n;
+  return 1;
+}
+
+static int show(void)
+{
+  ++calls;
+  printf("  [%s]\n", suffix);
+  return calls != stop_at;
+}
+
+static void set64(char *at, unsigned long long u)
+{
+  int i;
+
+  for (i = 0; i < 8; ++i) { at[i] = (char) u; u >>= 8; }
+}
+
+/* Store reference r at offset in a copy of the dump, then look up probe. */
+static void bad_child(const char *name, int offset, unsigned long long r,
+                      const char *probe)
+{
+  limitmalloc_pool pool = { LIMITMALLOC_MAX, 0, 0 };
+  critbit0_image bad;
+  str0 key = (str0) probe;
+  str0 result = 0;
+
+  memcpy(damaged, bytes, (size_t) length);
+  set64(damaged + offset, r);
+  if (!critbit0_image_init(&bad, damaged, length)) {
+    printf("%s: init failed\n", name);
+    return;
+  }
+  printf("%s: contains %d, firstprefixed %d, allprefixed %d\n", name,
+         critbit0_image_contains(&bad, &key),
+         critbit0_image_firstprefixed(&bad, &pool, &result, &key),
+         critbit0_image_allprefixed(&bad, &pool, &suffix, &key, show));
+}
+
+int main(void)
+{
+  critbit0_tree tree = { 0 };
+  limitmalloc_pool pool = { LIMITMALLOC_MAX, 0, 0 };
+  limitmalloc_pool empty_pool = { 0, 0, 0 };
+  critbit0_image image;
+  critbit0_image bad;
+  const char *probes[] = { "a", "ca", "cb", "c", "", "x", "cab", 0 };
+  str0 ca = "ca", cb = "cb", a = "a";
+  str0 key;
+  str0 result = 0;
+  int i;
+  int r;
+
+  if (critbit0_insert(&tree, &pool, &ca) != 2 ||
+      critbit0_insert(&tree, &pool, &cb) != 2 ||
+      critbit0_insert(&tree, &pool, &a) != 2 ||
+      !critbit0_dump(&tree, put)) return 1;
+
+  printf("init short: %d\n", critbit0_image_init(&image, bytes, 31));
+  printf("init length mismatch: %d\n",
+         critbit0_image_init(&image, bytes, length - 8));
+  memcpy(damaged, bytes, (size_t) length);
+  damaged[0] = 'C';
+  printf("init magic: %d\n", critbit0_image_init(&bad, damaged, length));
+  memcpy(damaged, bytes, (size_t) length);
+  damaged[8] = 2;
+  printf("init version: %d\n", critbit0_image_init(&bad, damaged, length));
+  memcpy(damaged, bytes, (size_t) length);
+  set64(damaged + 24, 36);
+  printf("init unaligned root: %d\n",
+         critbit0_image_init(&bad, damaged, length));
+  memcpy(damaged, bytes, (size_t) length);
+  set64(damaged + 24, (unsigned long long) length + 1);
+  printf("init root past end: %d\n",
+         critbit0_image_init(&bad, damaged, length));
+  memcpy(damaged, bytes, (size_t) length);
+  set64(damaged + 24, 24);
+  printf("init root in header: %d\n",
+         critbit0_image_init(&bad, damaged, length));
+  memcpy(damaged, bytes, (size_t) length);
+  set64(damaged + 24, (unsigned long long) length - 16 + 1);
+  printf("init root node too short: %d\n",
+         critbit0_image_init(&bad, damaged, length));
+  printf("init: %d\n", critbit0_image_init(&image, bytes, length));
+
+  for (i = 0; probes[i]; ++i) {
+    key = (str0) probes[i];
+    printf("contains [%s]: tree %d, image %d\n", probes[i],
+           critbit0_contains(&tree, &key),
+           critbit0_image_contains(&image, &key));
+  }
+  for (i = 0; probes[i]; ++i) {
+    key = (str0) probes[i];
+    r = critbit0_image_firstprefixed(&image, &pool, &result, &key);
+    printf("firstprefixed [%s]: %d", probes[i], r);
+    if (r == 1) {
+      printf(" [%s]", result);
+      str0_free(&result, &pool);
+    }
+    printf("\n");
+  }
+
+  key = "c";
+  stop_at = 0;
+  calls = 0;
+  printf("allprefixed [c]:\n");
+  printf("  result %d\n",
+         critbit0_image_allprefixed(&image, &pool, &suffix, &key, show));
+  key = "";
+  calls = 0;
+  stop_at = 2;
+  printf("allprefixed [] stop at 2:\n");
+  printf("  result %d\n",
+         critbit0_image_allprefixed(&image, &pool, &suffix, &key, show));
+  printf("allprefixed [] null callback: %d [%s]\n",
+         critbit0_image_allprefixed(&image, &pool, &suffix, &key, 0), suffix);
+  key = "x";
+  printf("allprefixed [x]: %d\n",
+         critbit0_image_allprefixed(&image, &pool, &suffix, &key, show));
+  str0_free(&suffix, &pool);
+
+  key = "c";
+  errno = 0;
+  r = critbit0_image_firstprefixed(&image, &empty_pool, &result, &key);
+  printf("firstprefixed out of memory: %d, ENOMEM %d\n", r, errno == ENOMEM);
+  printf("allprefixed out of memory: %d\n",
+         critbit0_image_allprefixed(&image, &empty_pool, &suffix, &key, show));
+
+  /* The key a is the first record and the root node the last; fill every
+     byte between them so the key's NUL lies past its parent. */
+  memcpy(damaged, bytes, (size_t) length);
+  memset(damaged + 32, 'a', (size_t) (length - 24 - 32));
+  if (!critbit0_image_init(&bad, damaged, length)) return 1;
+  key = "a";
+  printf("unterminated key: contains %d, firstprefixed %d, allprefixed %d\n",
+         critbit0_image_contains(&bad, &key),
+         critbit0_image_firstprefixed(&bad, &pool, &result, &key),
+         critbit0_image_allprefixed(&bad, &pool, &suffix, &key, show));
+
+  /* Records: a at 32, ca at 40, cb at 48, the ca/cb node at 56, the root
+     node at 80 with child 0 at 80 and child 1 at 88. */
+  bad_child("child 0 unaligned", 80, 36, "a");
+  bad_child("child 0 in header", 80, 16, "a");
+  bad_child("child 0 node in header", 80, 17, "a");
+  bad_child("child 1 node too short", 88, 73, "ca");
+
+  /* Damage cb, which only the walk under the empty prefix reaches, after
+     the callbacks for a and ca. */
+  memcpy(damaged, bytes, (size_t) length);
+  set64(damaged + 64, 200);
+  if (!critbit0_image_init(&bad, damaged, length)) return 1;
+  key = "";
+  calls = 0;
+  stop_at = 0;
+  printf("walk reaches damaged cb:\n");
+  printf("  result %d\n",
+         critbit0_image_allprefixed(&bad, &pool, &suffix, &key, show));
+  str0_free(&suffix, &pool);
+
+  critbit0_clear(&tree, &pool);
+  return 0;
+}
+EOF
+if ! "${CC:-cc}" -I"${home}/tests/prefix/include" \
+  -o "${basedir}/critbit0_image_operations" \
+  "${basedir}/critbit0_image_operations.c" \
+  -L"${home}/tests/prefix/lib" -lcritbit0 2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/critbit0_image_operations"
+
+_run cbt-mmap-lf
+_dump "${basedir}/m.dump" ca cb a
+_cbt_mapped "${basedir}/m.dump" 'has ca' 'has c' 'after c' 'list c' \
+  'complete c' 'write' 'exit' 'has a'
+
+_run cbt-mmap-nul
+_dump "${basedir}/m.dump" ca cb a
+{ printf 'has ca\000list c\000' | "${home}/tests/prefix/bin/cbt" -0 -m "${basedir}/m.dump" > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+{ printf 'has ca\000list c\000' | "${home}/tests/prefix/bin/cbt" -m "${basedir}/m.dump" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+{ printf 'has ca\000' | "${home}/tests/prefix/bin/cbt" -m"${basedir}/m.dump" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-mmap-dump
+_dump "${basedir}/m.dump" ca cb a
+_cbt_mapped "${basedir}/m.dump" 'dump tests/basedir/m2.dump'
+cmp "${basedir}/m.dump" "${basedir}/m2.dump"
+echo "$?"
+
+_run cbt-mmap-dump-same-path
+_dump "${basedir}/same.dump" ca cb a
+_cbt_mapped "${basedir}/same.dump" 'dump tests/basedir/same.dump' 'list '
+_cbt_mapped "${basedir}/same.dump" 'list '
+
+_run cbt-mmap-save
+_dump "${basedir}/m.dump" ca cb a
+_cbt_mapped "${basedir}/m.dump" 'save tests/basedir/m.snapshot'
+cat "${basedir}/m.snapshot"
+
+_run cbt-mmap-read-only
+_dump "${basedir}/m.dump" ca cb a
+printf 'z\n\n' > "${basedir}/z.snapshot"
+for request in 'add x' 'rm a' 'clear' 'load tests/basedir/z.snapshot' 'read'
+do
+  _cbt_mapped "${basedir}/m.dump" "${request}"
+done
+_cbt_mapped "${basedir}/m.dump" 'read' 'z' '' 'has z'
+
+_run cbt-mmap-request-checks-first
+_dump "${basedir}/m.dump" a
+_cbt_mapped "${basedir}/m.dump" 'add'
+_cbt_mapped "${basedir}/m.dump" 'clear x'
+
+_run cbt-mmap-empty-tree
+_dump "${basedir}/none.dump"
+_cbt_mapped "${basedir}/none.dump" 'has x' 'after ' 'list ' 'complete ' 'write'
+
+_run cbt-mmap-empty-key
+_dump "${basedir}/empty-key.dump" ''
+_cbt_mapped "${basedir}/empty-key.dump" 'has ' 'has x' 'after ' 'complete '
+_cbt_mapped "${basedir}/empty-key.dump" 'list '
+_cbt_mapped "${basedir}/empty-key.dump" 'write'
+
+_run cbt-mmap-options
+_dump "${basedir}/m.dump" a
+_cbt_arguments -m
+_cbt_arguments -0 -0
+_cbt_arguments -00
+_cbt_arguments -m tests/basedir/m.dump -m tests/basedir/m.dump
+_cbt_arguments -m tests/basedir/m.dump extra
+_cbt_arguments extra -m tests/basedir/m.dump
+_cbt_arguments -x -m tests/basedir/m.dump
+
+_run cbt-mmap-cannot-open
+mkdir -p "${basedir}/mmap-directory"
+_cbt_arguments -m "${basedir}/missing.dump"
+_cbt_arguments -m "${basedir}/mmap-directory"
+
+_run cbt-mmap-malformed-header
+_dump "${basedir}/ab.dump" b a
+printf 'a\n\n' > "${basedir}/not-dump.snapshot"
+: > "${basedir}/zero.dump"
+head -c 64 "${basedir}/ab.dump" > "${basedir}/short.dump"
+{ head -c 8 "${basedir}/ab.dump"; printf '\002'; tail -c +10 "${basedir}/ab.dump"; } > "${basedir}/version.dump"
+head -c 31 "${basedir}/ab.dump" > "${basedir}/tiny.dump"
+for name in not-dump.snapshot zero.dump short.dump version.dump tiny.dump
+do
+  _cbt_arguments -m "${basedir}/${name}"
+done
+
+_run cbt-mmap-malformed-record
+_dump "${basedir}/ab.dump" b a
+{ head -c 48 "${basedir}/ab.dump"; printf '\110\0\0\0\0\0\0\0'; tail -c 16 "${basedir}/ab.dump"; } > "${basedir}/bad-child.dump"
+for request in 'has a' 'after a' 'list a' 'complete a' 'save tests/basedir/bad.snapshot' 'write'
+do
+  _cbt_mapped "${basedir}/bad-child.dump" "${request}"
+done
+_cbt_mapped "${basedir}/bad-child.dump" 'has b' 'list b'
+
+_run cbt-mmap-malformed-record-after-output
+_dump "${basedir}/m.dump" ca cb a
+{ head -c 64 "${basedir}/m.dump"; printf '\310\0\0\0\0\0\0\0'; tail -c +73 "${basedir}/m.dump"; } > "${basedir}/bad-cb.dump"
+_cbt_mapped "${basedir}/bad-cb.dump" 'has a' 'has ca'
+_cbt_mapped "${basedir}/bad-cb.dump" 'complete '
+_cbt_mapped "${basedir}/bad-cb.dump" 'list c'
+_cbt_mapped "${basedir}/bad-cb.dump" 'save tests/basedir/bad-cb.snapshot'
+cat "${basedir}/bad-cb.snapshot"
+_cbt_mapped "${basedir}/bad-cb.dump" 'write'
+
+_run cbt-mmap-cannot-map
+_dump "${basedir}/m.dump" a
+cat > "${basedir}/cbt_mmap_fail.c" <<'EOF'
+#define _POSIX_C_SOURCE 200809L
+#include <errno.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+
+static void *failing_mmap(void *address, size_t length, int protection,
+                          int flags, int fd, off_t offset)
+{
+  (void) address;
+  (void) length;
+  (void) protection;
+  (void) flags;
+  (void) fd;
+  (void) offset;
+  errno = ENOMEM;
+  return MAP_FAILED;
+}
+
+#define mmap failing_mmap
+#define main cbt_program_main
+#include "../../cbt.c"
+#undef main
+
+/* Usage: cbt_mmap_fail dump
+   Run cbt -m dump with mmap failing. */
+int main(int argc, char **argv)
+{
+  char *arguments[] = { "cbt", "-m", 0, 0 };
+
+  if (argc != 2) return 2;
+  arguments[2] = argv[1];
+  return cbt_program_main(3, arguments);
+}
+EOF
+if ! "${CC:-cc}" -I. -o "${basedir}/cbt_mmap_fail" \
+  "${basedir}/cbt_mmap_fail.c" libcritbit0.a 2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/cbt_mmap_fail" "${basedir}/m.dump" < /dev/null
 
 _run make-header-dependencies
 _make_stubs "${basedir}/make"
