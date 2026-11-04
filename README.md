@@ -24,7 +24,7 @@ Run `make install PREFIX=/path/to/prefix` to install `libcritbit0.a` in `PREFIX/
 cbt [-0]
 ```
 
-The `cbt` program keeps one crit-bit tree in memory for the life of the process. It reads requests from standard input, writes results to standard output, and writes errors to standard error. It writes each request's output before reading the next request, so another program can keep it running and exchange one request and response at a time. The tree starts empty and is discarded at exit; `save` and `write` keep a copy.
+The `cbt` program keeps one crit-bit tree in memory for the life of the process. It reads requests from standard input, writes results to standard output, and writes errors to standard error. It writes each request's output before reading the next request, so another program can keep it running and exchange one request and response at a time. The tree starts empty and is discarded at exit; `save`, `write`, and `dump` keep a copy.
 
 ### Options
 
@@ -51,6 +51,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 | `complete <prefix>` | The bytes after the prefix of each longer matching key in byte order, then one empty record |
 | `load <path>` | None |
 | `save <path>` | None |
+| `dump <file>` | None |
 | `read` | None; the snapshot records follow the request on standard input |
 | `write` | The snapshot: every key in byte order, then one empty record |
 | `exit` | None |
@@ -64,6 +65,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 - `complete`: Prints the bytes after the prefix of each key that starts with the prefix, in byte order, skipping a key equal to the prefix. The empty prefix matches every nonempty key. A caller tells whether the prefix is itself a key with `has`.
 - `load`: Reads the snapshot file at the path. See [Snapshots](#snapshots).
 - `save`: Writes the snapshot to the named file.
+- `dump`: Writes the tree to the named file in the binary dump layout. See [Dumps](#dumps).
 - `read`: Reads a snapshot from standard input up to its empty record, then resumes reading requests.
 - `write`: Writes the snapshot to standard output.
 - `exit`: Stops `cbt` with status 0 without reading further requests. Output for earlier requests is already written.
@@ -77,6 +79,23 @@ A snapshot is raw keys, each ending with the selected delimiter, followed by one
 The `load` and `read` commands add the snapshot's keys to the current tree. Keys already present, including keys the snapshot lacks, stay in place. A snapshot that fails to load, because it is malformed or memory runs out, leaves the tree as it was. The `load` command rejects a file that is empty, lacks the end marker, or holds bytes after it. A nonempty snapshot written with the other delimiter is rejected.
 
 The `save` and `write` commands fail before opening the file or writing output when the tree holds the empty key. The `save` command writes the named file in place: it truncates the file, then writes the snapshot, and a save through a symlink writes the symlink's target. A failed save can leave the file empty or partial. Changes in memory are durable only after a `save` succeeds.
+
+### Dumps
+
+A dump holds the tree's nodes and keys in a fixed binary layout that a later process can map with `mmap` and search in place, without rebuilding the tree. The layout is the same in both delimiter modes, and the empty key can be dumped. Every integer is little-endian on every host.
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 8 | The ASCII bytes `critbit0` |
+| 8 | 8 | Version, `1` |
+| 16 | 8 | Total file length in bytes |
+| 24 | 8 | Root reference; `0` for the empty tree |
+
+Records follow the 32-byte header. A reference is a byte offset from the start of the file. A reference with low bit 1 names an internal node at the offset minus 1; one with low bit 0 names a key. An internal node is 24 bytes: the uint64 reference of child 0, the uint64 reference of child 1, the uint32 critical byte index, the uint8 `otherbits` mask (every bit set except the critical bit), and three zero bytes. A key record is the key's bytes and a NUL, padded with zero bytes to a multiple of 8, so every record starts on an 8-byte boundary. Records are in postorder: the child 0 subtree, the child 1 subtree, then the node. Each child sits before its parent, the root record is last, and the same set of keys gives the same bytes.
+
+The `dump` command removes any existing file at the path, then creates it with the permissions `save` gives a new file, 0666 less the umask. A process that already has the old file open or mapped keeps the old bytes. A dump through a symlink replaces the symlink. A failed dump can leave a partial file. Success prints nothing.
+
+For example, after `add b` and `add a`, `dump` writes 72 bytes: the header with length 72 and root reference 49, the key `a` at offset 32, the key `b` at offset 40, and at offset 48 the node with children 32 and 40, byte 0, and `otherbits` `0xfd`.
 
 ### Errors and exit status
 
@@ -96,6 +115,7 @@ On the first error, `cbt` writes one message to standard error and exits with st
 | `cbt: fatal: complete: missing operand` | `complete` with no operand |
 | `cbt: fatal: load: missing operand` | `load` with no operand |
 | `cbt: fatal: save: missing operand` | `save` with no operand |
+| `cbt: fatal: dump: missing operand` | `dump` with no operand |
 | `cbt: fatal: clear: unexpected operand` | `clear` with an operand, even an empty one |
 | `cbt: fatal: read: unexpected operand` | `read` with an operand, even an empty one |
 | `cbt: fatal: write: unexpected operand` | `write` with an operand, even an empty one |
@@ -116,6 +136,8 @@ On the first error, `cbt` writes one message to standard error and exits with st
 | `cbt: fatal: save: cannot open file` | `save` cannot open or create the file |
 | `cbt: fatal: save: out of memory` | `save` ran out of memory |
 | `cbt: fatal: save: write error` | `save` cannot write or close the file |
+| `cbt: fatal: dump: cannot open file` | `dump` cannot create the file, as when its directory is missing or the path names a directory |
+| `cbt: fatal: dump: write error` | `dump` cannot write, flush, sync, or close the file |
 | `cbt: fatal: load: cannot open file` | `load` cannot open the file |
 | `cbt: fatal: load: read error` | `load` cannot read the file |
 | `cbt: fatal: load: malformed record` | The file holds a NUL inside a default-mode record or ends with a record lacking its delimiter, as a snapshot in the other delimiter does |
@@ -195,8 +217,11 @@ The operations and their results are:
 | `critbit0_clear` | Releases all keys and nodes |
 | `critbit0_firstprefixed` | `1` and one suffix after the prefix, or `0` if absent or allocation fails; `errno` distinguishes allocation failure |
 | `critbit0_allprefixed` | Visits suffixes in tree order; `1` after all matches, `0` if the callback stops, `-1` on suffix allocation failure |
+| `critbit0_dump` | Passes the tree's [dump](#dumps) image, in order, to a callback; `1` after the whole image, `0` if the callback stops |
 
 The `allprefixed` callback takes no arguments. It can read the suffix through caller-managed state and returns `1` to continue or `0` to stop. A null callback stops after the first match. The result buffer belongs to the caller after either prefix operation; see `critbit0.h` for its state on failure.
+
+The `critbit0_dump` callback takes a pointer to bytes and their count as an `int64`, and returns `1` to continue or `0` to stop. The function allocates nothing and needs no pool.
 
 Save this example as `example.c` in the repository root:
 
@@ -252,4 +277,4 @@ deleted ca: 1
 
 ## Imported source
 
-The baseline implementation comes from Daniel J. Bernstein's qhasm archive, version 20070207: https://cr.yp.to/qhasm/qhasm-20070207.tar.gz. The repository root holds the archive's six `critbit0_*.c` members unchanged. The imported `critbit0.h`, `str0.h`, `limitmalloc.h`, `str0_*.c`, and `limitmalloc_*.c` members provide their build dependencies. The `int64.h`, `uint8.h`, `uint32.h`, and `uint64.h` files come from the archive's corresponding `:8-stdint` members.
+The baseline implementation comes from Daniel J. Bernstein's qhasm archive, version 20070207: https://cr.yp.to/qhasm/qhasm-20070207.tar.gz. The repository root holds the archive's six `critbit0_*.c` members unchanged; `critbit0_dump.c` is project code. The imported `critbit0.h`, `str0.h`, `limitmalloc.h`, `str0_*.c`, and `limitmalloc_*.c` members provide their build dependencies. The `int64.h`, `uint8.h`, `uint32.h`, and `uint64.h` files come from the archive's corresponding `:8-stdint` members.

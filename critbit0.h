@@ -44,5 +44,11 @@ extern int critbit0_firstprefixed(critbit0_tree *,limitmalloc_pool *,str0 *,str0
    after the first match. On allocation failure, *result keeps its last
    successful value; free it with str0_free using the same pool. */
 extern int critbit0_allprefixed(critbit0_tree *,limitmalloc_pool *,str0 *,str0 *,int (*)(void));
+/* Pass the tree's dump image, in order, to put(bytes, length), which returns
+   1 to continue or 0 to stop. Return 1 after the whole image, 0 when put
+   stops. Allocates nothing. The image is a 32-byte header (the bytes
+   "critbit0", then little-endian uint64 version 1, total length, and root
+   reference) followed by records in postorder; README.md gives the layout. */
+extern int critbit0_dump(critbit0_tree *,int (*)(const char *,int64));
 
 #endif

@@ -2,7 +2,7 @@ needvars :=
 CC := cc
 AR := ar
 PREFIX := /usr/local
-LIB_SOURCES := critbit0_contains.c critbit0_insert.c critbit0_delete.c critbit0_clear.c critbit0_firstprefixed.c critbit0_allprefixed.c str0_length.c str0_equalc.c str0_copyc.c str0_free.c limitmalloc_open.c limitmalloc_open_if2.c limitmalloc_close.c
+LIB_SOURCES := critbit0_contains.c critbit0_insert.c critbit0_delete.c critbit0_clear.c critbit0_firstprefixed.c critbit0_allprefixed.c critbit0_dump.c str0_length.c str0_equalc.c str0_copyc.c str0_free.c limitmalloc_open.c limitmalloc_open_if2.c limitmalloc_close.c
 LIB_OBJECTS := $(LIB_SOURCES:.c=.o)
 LIMITMALLOC_HEADERS := limitmalloc.h int64.h
 STR0_HEADERS := str0.h uint64.h $(LIMITMALLOC_HEADERS)
@@ -74,7 +74,7 @@ cbt: cbt.c libcritbit0.a $(CRITBIT0_HEADERS)
 	  mv "$$temp" "$@"; \
 	  status=$$?; rm -f "$$temp"; exit "$$status"
 
-critbit0_contains.o critbit0_insert.o critbit0_delete.o critbit0_clear.o critbit0_firstprefixed.o critbit0_allprefixed.o: $(CRITBIT0_HEADERS)
+critbit0_contains.o critbit0_insert.o critbit0_delete.o critbit0_clear.o critbit0_firstprefixed.o critbit0_allprefixed.o critbit0_dump.o: $(CRITBIT0_HEADERS)
 str0_length.o str0_equalc.o str0_copyc.o str0_free.o: $(STR0_HEADERS)
 limitmalloc_open.o limitmalloc_open_if2.o limitmalloc_close.o: $(LIMITMALLOC_HEADERS)
 

@@ -946,6 +946,8 @@ cbt: fatal: load: missing operand
 1
 cbt: fatal: save: missing operand
 1
+cbt: fatal: dump: missing operand
+1
 
 
 ==== cbt-unexpected-operand ====
@@ -1029,33 +1031,131 @@ cbt: fatal: read: read error
 1
 
 
+==== cbt-dump-lf ====
+
+0
+2
+2
+6372697462697430010000000000000048000000000000003100000000000000610000000000000062000000000000002000000000000000280000000000000000000000fd000000
+
+
+==== cbt-dump-nul ====
+
+0
+32003200
+0
+
+
+==== cbt-dump-empty-tree ====
+
+0
+6372697462697430010000000000000020000000000000000000000000000000
+
+
+==== cbt-dump-empty-key ====
+
+2
+0
+63726974626974300100000000000000280000000000000020000000000000000000000000000000
+
+
+==== cbt-dump-three-keys ====
+
+2
+2
+2
+0
+63726974626974300100000000000000680000000000000051000000000000006100000000000000636100000000000063620000000000002800000000000000300000000000000001000000fd0000002000000000000000390000000000000000000000fd000000
+
+
+==== cbt-dump-mode ====
+
+-rw-r--r-- .../mode.dump
+-rw-r--r-- .../mode.snapshot
+
+
+==== cbt-dump-held-reader ====
+
+2
+0
+old
+63726974626974300100000000000000280000000000000020000000000000006100000000000000
+
+
+==== cbt-dump-symlink ====
+
+2
+0
+1
+prior
+63726974626974300100000000000000280000000000000020000000000000006100000000000000
+
+
+==== cbt-dump-cannot-open ====
+
+2
+cbt: fatal: dump: cannot open file
+1
+2
+cbt: fatal: dump: cannot open file
+1
+0
+
+
+==== cbt-dump-write-error ====
+
+2
+cbt: fatal: dump: write error
+1
+0
+
+
+==== critbit0-dump-early-stop ====
+
+full: result 1, calls 6, bytes 72
+stop at 1: result 0, calls 1
+stop at 2: result 0, calls 2
+stop at 3: result 0, calls 3
+stop at 4: result 0, calls 4
+stop at 5: result 0, calls 5
+stop at 6: result 0, calls 6
+0
+
+
 ==== make-header-dependencies ====
 
 critbit0.h critbit0_insert.o 1
+critbit0.h critbit0_dump.o 1
 critbit0.h str0_free.o 0
 critbit0.h limitmalloc_open.o 0
 critbit0.h cbt 1
 str0.h critbit0_insert.o 1
+str0.h critbit0_dump.o 1
 str0.h str0_free.o 1
 str0.h limitmalloc_open.o 0
 str0.h cbt 1
 limitmalloc.h critbit0_insert.o 1
+limitmalloc.h critbit0_dump.o 1
 limitmalloc.h str0_free.o 1
 limitmalloc.h limitmalloc_open.o 1
 limitmalloc.h cbt 1
 int64.h critbit0_insert.o 1
+int64.h critbit0_dump.o 1
 int64.h str0_free.o 1
 int64.h limitmalloc_open.o 1
 int64.h cbt 1
 uint8.h critbit0_insert.o 1
+uint8.h critbit0_dump.o 1
 uint8.h str0_free.o 0
 uint8.h limitmalloc_open.o 0
 uint8.h cbt 1
 uint32.h critbit0_insert.o 1
+uint32.h critbit0_dump.o 1
 uint32.h str0_free.o 0
 uint32.h limitmalloc_open.o 0
 uint32.h cbt 1
 uint64.h critbit0_insert.o 1
+uint64.h critbit0_dump.o 1
 uint64.h str0_free.o 1
 uint64.h limitmalloc_open.o 0
 uint64.h cbt 1

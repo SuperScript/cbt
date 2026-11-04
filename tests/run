@@ -733,7 +733,7 @@ _run cbt-exit-space
 _cbt_installed 'exit '
 
 _run cbt-missing-operand
-for command in has add rm after list complete load save
+for command in has add rm after list complete load save dump
 do
   _cbt_installed "${command}"
 done
@@ -804,6 +804,152 @@ _check "${basedir}/cbt_dispatch" limited write
 printf 'A\n\n' | _check "${basedir}/cbt_dispatch" limited read
 _check "${basedir}/cbt_dispatch" unlimited read < tests
 
+_run cbt-dump-lf
+{ printf 'add b\nadd a\ndump tests/basedir/ab.dump\n' | "${home}/tests/prefix/bin/cbt" > "${basedir}/raw-output"; echo "$?"; } | _sanitize
+cat "${basedir}/raw-output"
+_hex < "${basedir}/ab.dump"
+
+_run cbt-dump-nul
+{ printf 'add b\000add a\000dump tests/basedir/ab0.dump\000' | "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+cmp "${basedir}/ab.dump" "${basedir}/ab0.dump"
+echo "$?"
+
+_run cbt-dump-empty-tree
+_cbt_installed 'dump tests/basedir/none.dump'
+_hex < "${basedir}/none.dump"
+
+_run cbt-dump-empty-key
+_cbt_installed 'add ' 'dump tests/basedir/empty-key.dump'
+_hex < "${basedir}/empty-key.dump"
+
+_run cbt-dump-three-keys
+_cbt_installed 'add ca' 'add cb' 'add a' 'dump tests/basedir/three.dump'
+_hex < "${basedir}/three.dump"
+
+_run cbt-dump-mode
+(
+  umask 022
+  printf 'add a\ndump tests/basedir/mode.dump\nsave tests/basedir/mode.snapshot\n' \
+  | "${home}/tests/prefix/bin/cbt" > /dev/null
+)
+ls -l "${basedir}/mode.dump" "${basedir}/mode.snapshot" | awk '{ print $1, $NF }' | _sanitize
+
+_run cbt-dump-held-reader
+printf 'old\n' > "${basedir}/held.dump"
+exec 5< "${basedir}/held.dump"
+_cbt_installed 'add a' 'dump tests/basedir/held.dump'
+cat <&5
+exec 5<&-
+_hex < "${basedir}/held.dump"
+
+_run cbt-dump-symlink
+printf 'prior\n' > "${basedir}/dump-target"
+ln -s dump-target "${basedir}/dump-link"
+_cbt_installed 'add a' 'dump tests/basedir/dump-link'
+test -L "${basedir}/dump-link"
+echo "$?"
+cat "${basedir}/dump-target"
+_hex < "${basedir}/dump-link"
+
+_run cbt-dump-cannot-open
+_cbt_installed 'add a' 'dump tests/basedir/missing-directory/x'
+mkdir -p "${basedir}/dump-directory"
+_cbt_installed 'add a' 'dump tests/basedir/dump-directory'
+test -d "${basedir}/dump-directory"
+echo "$?"
+
+_run cbt-dump-write-error
+cat > "${basedir}/cbt_dump_write.c" <<'EOF'
+#define _POSIX_C_SOURCE 200809L
+#include <stdio.h>
+
+static size_t failing_fwrite(const void *bytes, size_t size, size_t count,
+                             FILE *stream)
+{
+  (void) bytes;
+  (void) size;
+  (void) count;
+  (void) stream;
+  return 0;
+}
+
+#define fwrite failing_fwrite
+#define main cbt_program_main
+#include "../../cbt.c"
+#undef main
+
+int main(void)
+{
+  critbit0_tree tree = { 0 };
+  limitmalloc_pool pool = { LIMITMALLOC_MAX, 0, 0 };
+  char add[] = "add a";
+  char request[] = "dump tests/basedir/write-error.dump";
+
+  if (dispatch(add, &tree, &pool) != 0) return 2;
+  return dispatch(request, &tree, &pool);
+}
+EOF
+if ! "${CC:-cc}" -I. -o "${basedir}/cbt_dump_write" \
+  "${basedir}/cbt_dump_write.c" libcritbit0.a 2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/cbt_dump_write"
+test -f "${basedir}/write-error.dump"
+echo "$?"
+
+_run critbit0-dump-early-stop
+cat > "${basedir}/critbit0_dump_stop.c" <<'EOF'
+#include <stdio.h>
+#include <critbit0.h>
+
+static int calls;
+static int stop_at;
+static int64 bytes;
+
+static int put(const char *data, int64 length)
+{
+  (void) data;
+  ++calls;
+  bytes += length;
+  return calls != stop_at;
+}
+
+int main(void)
+{
+  critbit0_tree tree = { 0 };
+  limitmalloc_pool pool = { LIMITMALLOC_MAX, 0, 0 };
+  str0 a = "a", b = "b";
+  int total;
+  int result;
+
+  if (critbit0_insert(&tree, &pool, &a) != 2 ||
+      critbit0_insert(&tree, &pool, &b) != 2) return 1;
+  stop_at = 0;
+  result = critbit0_dump(&tree, put);
+  total = calls;
+  printf("full: result %d, calls %d, bytes %lld\n", result, calls,
+         (long long) bytes);
+  for (stop_at = 1; stop_at <= total; ++stop_at) {
+    calls = 0;
+    result = critbit0_dump(&tree, put);
+    printf("stop at %d: result %d, calls %d\n", stop_at, result, calls);
+  }
+  critbit0_clear(&tree, &pool);
+  return 0;
+}
+EOF
+if ! "${CC:-cc}" -I"${home}/tests/prefix/include" \
+  -o "${basedir}/critbit0_dump_stop" "${basedir}/critbit0_dump_stop.c" \
+  -L"${home}/tests/prefix/lib" -lcritbit0 2> "${basedir}/compile.err"
+then
+  cat "${basedir}/compile.err" >&2
+  exit 1
+fi
+_check "${basedir}/critbit0_dump_stop"
+
 _run make-header-dependencies
 _make_stubs "${basedir}/make"
 (
@@ -811,7 +957,7 @@ _make_stubs "${basedir}/make"
   for header in critbit0.h str0.h limitmalloc.h int64.h uint8.h uint32.h uint64.h
   do
     touch -t 200001020000 "${header}"
-    for target in critbit0_insert.o str0_free.o limitmalloc_open.o cbt
+    for target in critbit0_insert.o critbit0_dump.o str0_free.o limitmalloc_open.o cbt
     do
       stale=0
       if "${MAKE:-make}" -n CC=compile AR=archive "${target}" 2> /dev/null \

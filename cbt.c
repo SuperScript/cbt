@@ -1,16 +1,19 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "critbit0.h"
 
 static str0 suffix;
 static int output_failed;
 static const char *match_prefix;
 static FILE *snapshot_output;
+static FILE *dump_output;
 static int raw_stream;
 static int terminator = '\n';
 
@@ -235,6 +238,33 @@ static int write_snapshot(critbit0_tree *tree, limitmalloc_pool *pool)
   return 0;
 }
 
+static int dump_put(const char *bytes, int64 length)
+{
+  return fwrite(bytes, 1, (size_t) length, dump_output) == (size_t) length;
+}
+
+/* Unlink path before creating it, as tinycdb's cdb -c -t - does, so a
+   process that has the old file mapped keeps the old bytes. */
+static int dump_tree(const char *path, critbit0_tree *tree)
+{
+  const char *failure = 0;
+  int fd;
+
+  unlink(path);
+  fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
+  if (fd == -1) return fail("dump", "cannot open file");
+  dump_output = fdopen(fd, "w");
+  if (!dump_output) {
+    close(fd);
+    return fail("dump", "cannot open file");
+  }
+  if (!critbit0_dump(tree, dump_put) || fflush(dump_output) == EOF ||
+      fsync(fd) == -1) failure = "write error";
+  if (fclose(dump_output) == EOF && !failure) failure = "write error";
+  if (failure) return fail("dump", failure);
+  return 0;
+}
+
 static int match(void)
 {
   fputs(match_prefix, stdout);
@@ -349,6 +379,13 @@ static int command_save(char *operand, critbit0_tree *tree,
   return save_snapshot(operand, tree, pool);
 }
 
+static int command_dump(char *operand, critbit0_tree *tree,
+                        limitmalloc_pool *pool)
+{
+  (void) pool;
+  return dump_tree(operand, tree);
+}
+
 static int command_clear(char *operand, critbit0_tree *tree,
                          limitmalloc_pool *pool)
 {
@@ -393,6 +430,7 @@ static const struct command {
   { "complete", 1, command_complete },
   { "load", 1, command_load },
   { "save", 1, command_save },
+  { "dump", 1, command_dump },
   { "clear", 0, command_clear },
   { "read", 0, command_read },
   { "write", 0, command_write },
