@@ -48,7 +48,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 | `rm <key>` | `1` if deleted, `0` if absent |
 | `clear` | None |
 | `after <prefix>` | The suffix of the first matching key, or nothing when no key matches |
-| `list <prefix>` | Each matching full key in byte order, then one empty record |
+| `list <prefix>`, `list` | Each matching full key in byte order, then one empty record; bare `list` uses the empty prefix |
 | `complete <prefix>` | The bytes after the prefix of each longer matching key in byte order, then one empty record |
 | `load <path>` | None |
 | `save <path>` | None |
@@ -62,7 +62,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 - `rm`: Deletes the key.
 - `clear`: Removes every key.
 - `after`: Finds the first key in byte order that starts with the prefix and prints the bytes after the prefix. A key equal to the prefix gives an empty suffix, printed as an empty record. A prefix no key starts with prints no record, so a caller that needs to tell these cases apart uses `has` or `list`.
-- `list`: Prints the full keys that start with the prefix. The empty prefix matches every key. Because the empty record ends the list, `list` fails before printing when its results include the empty key.
+- `list`: Prints the full keys that start with the prefix. The empty prefix matches every key, and a bare `list`, sent with no operand, uses the empty prefix. Because the empty record ends the list, `list` fails before printing when its results include the empty key.
 - `complete`: Prints the bytes after the prefix of each key that starts with the prefix, in byte order, skipping a key equal to the prefix. The empty prefix matches every nonempty key. A caller tells whether the prefix is itself a key with `has`.
 - `load`: Reads the snapshot file at the path. See [Snapshots](#snapshots).
 - `save`: Writes the snapshot to the named file.
@@ -71,7 +71,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 - `write`: Writes the snapshot to standard output.
 - `exit`: Stops `cbt` with status 0 without reading further requests. Output for earlier requests is already written.
 
-An unknown command fails with `cbt: fatal: unknown command`. A command that takes an operand, sent with none, is a fatal error: `cbt: fatal: <command>: missing operand`. A command that takes no operand, sent with one, even an empty one, is a fatal error: `cbt: fatal: <command>: unexpected operand`.
+An unknown command fails with `cbt: fatal: unknown command`. A command that takes an operand, sent with none, is a fatal error: `cbt: fatal: <command>: missing operand`. The exception is `list`, which treats a missing operand as the empty prefix. A command that takes no operand, sent with one, even an empty one, is a fatal error: `cbt: fatal: <command>: unexpected operand`.
 
 ### Read-only mode
 
@@ -123,7 +123,6 @@ On the first error, `cbt` writes one message to standard error and exits with st
 | `cbt: fatal: add: missing operand` | `add` with no operand |
 | `cbt: fatal: rm: missing operand` | `rm` with no operand |
 | `cbt: fatal: after: missing operand` | `after` with no operand |
-| `cbt: fatal: list: missing operand` | `list` with no operand |
 | `cbt: fatal: complete: missing operand` | `complete` with no operand |
 | `cbt: fatal: load: missing operand` | `load` with no operand |
 | `cbt: fatal: save: missing operand` | `save` with no operand |

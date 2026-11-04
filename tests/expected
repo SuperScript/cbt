@@ -688,6 +688,23 @@ x
 0
 
 
+==== cbt-list-bare-lf ====
+
+2
+2
+a
+b
+
+0
+
+
+==== cbt-list-bare-empty-key-lf ====
+
+2
+cbt: fatal: list: empty key cannot be listed
+1
+
+
 ==== cbt-has-space-absent-nul ====
 
 0
@@ -806,6 +823,12 @@ x
 
 0
 3200780000
+
+
+==== cbt-list-bare-nul ====
+
+0
+3200620000
 
 
 ==== cbt-complete-lf ====
@@ -937,8 +960,6 @@ cbt: fatal: add: missing operand
 cbt: fatal: rm: missing operand
 1
 cbt: fatal: after: missing operand
-1
-cbt: fatal: list: missing operand
 1
 cbt: fatal: complete: missing operand
 1
@@ -1257,6 +1278,14 @@ cbt: fatal: clear: unexpected operand
 0
 
 
+
+0
+
+
+==== cbt-mmap-list-bare ====
+
+a
+ca
 
 0
 

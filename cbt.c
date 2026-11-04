@@ -461,31 +461,34 @@ static int command_exit(char *operand, critbit0_tree *tree,
   return -1;
 }
 
+enum { OPERAND_NONE, OPERAND_REQUIRED, OPERAND_OPTIONAL };
+
 static const struct command {
   const char *name;
   int takes_operand;
   int changes_tree;
   int (*run)(char *, critbit0_tree *, limitmalloc_pool *);
 } commands[] = {
-  { "has", 1, 0, command_has },
-  { "add", 1, 1, command_add },
-  { "rm", 1, 1, command_rm },
-  { "after", 1, 0, command_after },
-  { "list", 1, 0, command_list },
-  { "complete", 1, 0, command_complete },
-  { "load", 1, 1, command_load },
-  { "save", 1, 0, command_save },
-  { "dump", 1, 0, command_dump },
-  { "clear", 0, 1, command_clear },
-  { "read", 0, 1, command_read },
-  { "write", 0, 0, command_write },
-  { "exit", 0, 0, command_exit },
+  { "has", OPERAND_REQUIRED, 0, command_has },
+  { "add", OPERAND_REQUIRED, 1, command_add },
+  { "rm", OPERAND_REQUIRED, 1, command_rm },
+  { "after", OPERAND_REQUIRED, 0, command_after },
+  { "list", OPERAND_OPTIONAL, 0, command_list },
+  { "complete", OPERAND_REQUIRED, 0, command_complete },
+  { "load", OPERAND_REQUIRED, 1, command_load },
+  { "save", OPERAND_REQUIRED, 0, command_save },
+  { "dump", OPERAND_REQUIRED, 0, command_dump },
+  { "clear", OPERAND_NONE, 1, command_clear },
+  { "read", OPERAND_NONE, 1, command_read },
+  { "write", OPERAND_NONE, 0, command_write },
+  { "exit", OPERAND_NONE, 0, command_exit },
   { 0, 0, 0, 0 }
 };
 
 /* Return 0 to continue, 1 after reporting a failure, or -1 to exit. */
 static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
 {
+  static char empty[1];
   char *operand = strchr(line, ' ');
   const struct command *command;
 
@@ -493,9 +496,10 @@ static int dispatch(char *line, critbit0_tree *tree, limitmalloc_pool *pool)
   for (command = commands; command->name; command++)
     if (strcmp(line, command->name) == 0) break;
   if (!command->name) return fail(0, "unknown command");
-  if (command->takes_operand && !operand)
+  if (command->takes_operand == OPERAND_OPTIONAL && !operand) operand = empty;
+  if (command->takes_operand == OPERAND_REQUIRED && !operand)
     return fail(command->name, "missing operand");
-  if (!command->takes_operand && operand)
+  if (command->takes_operand == OPERAND_NONE && operand)
     return fail(command->name, "unexpected operand");
   if (mapped && command->changes_tree)
     return fail(command->name, "read-only tree");
