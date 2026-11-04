@@ -247,6 +247,18 @@ static int match(void)
   return 1;
 }
 
+static int extension(void)
+{
+  if (!*suffix) return 1;
+  fputs(suffix, stdout);
+  putchar(terminator);
+  if (ferror(stdout)) {
+    output_failed = 1;
+    return 0;
+  }
+  return 1;
+}
+
 static int command_has(char *operand, critbit0_tree *tree,
                        limitmalloc_pool *pool)
 {
@@ -310,6 +322,21 @@ static int command_list(char *operand, critbit0_tree *tree,
   return 0;
 }
 
+static int command_complete(char *operand, critbit0_tree *tree,
+                            limitmalloc_pool *pool)
+{
+  str0 key = operand;
+  int result;
+
+  result = critbit0_allprefixed(tree, pool, &suffix, &key, extension);
+  str0_free(&suffix, pool);
+  if (result < 0) return fail("complete", "out of memory");
+  if (output_failed || result == 0)
+    return fail("complete", "output failed");
+  response("");
+  return 0;
+}
+
 static int command_load(char *operand, critbit0_tree *tree,
                         limitmalloc_pool *pool)
 {
@@ -363,6 +390,7 @@ static const struct command {
   { "rm", 1, command_rm },
   { "after", 1, command_after },
   { "list", 1, command_list },
+  { "complete", 1, command_complete },
   { "load", 1, command_load },
   { "save", 1, command_save },
   { "clear", 0, command_clear },

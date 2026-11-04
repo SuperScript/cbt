@@ -48,6 +48,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 | `clear` | None |
 | `after <prefix>` | The suffix of the first matching key, or nothing when no key matches |
 | `list <prefix>` | Each matching full key in byte order, then one empty record |
+| `complete <prefix>` | The bytes after the prefix of each longer matching key in byte order, then one empty record |
 | `load <path>` | None |
 | `save <path>` | None |
 | `read` | None; the snapshot records follow the request on standard input |
@@ -60,6 +61,7 @@ Keys, prefixes, and paths are raw bytes. Backslashes, tabs, spaces, and control 
 - `clear`: Removes every key.
 - `after`: Finds the first key in byte order that starts with the prefix and prints the bytes after the prefix. A key equal to the prefix gives an empty suffix, printed as an empty record. A prefix no key starts with prints no record, so a caller that needs to tell these cases apart uses `has` or `list`.
 - `list`: Prints the full keys that start with the prefix. The empty prefix matches every key. Because the empty record ends the list, `list` fails before printing when its results include the empty key.
+- `complete`: Prints the bytes after the prefix of each key that starts with the prefix, in byte order, skipping a key equal to the prefix. The empty prefix matches every nonempty key. A caller tells whether the prefix is itself a key with `has`.
 - `load`: Reads the snapshot file at the path. See [Snapshots](#snapshots).
 - `save`: Writes the snapshot to the named file.
 - `read`: Reads a snapshot from standard input up to its empty record, then resumes reading requests.
@@ -91,6 +93,7 @@ On the first error, `cbt` writes one message to standard error and exits with st
 | `cbt: fatal: rm: missing operand` | `rm` with no operand |
 | `cbt: fatal: after: missing operand` | `after` with no operand |
 | `cbt: fatal: list: missing operand` | `list` with no operand |
+| `cbt: fatal: complete: missing operand` | `complete` with no operand |
 | `cbt: fatal: load: missing operand` | `load` with no operand |
 | `cbt: fatal: save: missing operand` | `save` with no operand |
 | `cbt: fatal: clear: unexpected operand` | `clear` with an operand, even an empty one |
@@ -104,6 +107,8 @@ On the first error, `cbt` writes one message to standard error and exits with st
 | `cbt: fatal: list: out of memory` | `list` ran out of memory |
 | `cbt: fatal: list: empty key cannot be listed` | `list` would print the empty key |
 | `cbt: fatal: list: output failed` | `list` cannot write its keys to standard output |
+| `cbt: fatal: complete: out of memory` | `complete` ran out of memory |
+| `cbt: fatal: complete: output failed` | `complete` cannot write its extensions to standard output |
 | `cbt: fatal: write: empty key cannot be stored` | `write` while the tree holds the empty key |
 | `cbt: fatal: write: out of memory` | `write` ran out of memory |
 | `cbt: fatal: write: output failed` | `write` cannot write the snapshot to standard output |

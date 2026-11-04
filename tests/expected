@@ -808,6 +808,53 @@ x
 3200780000
 
 
+==== cbt-complete-lf ====
+
+2
+2
+2
+a
+b
+
+
+0
+
+
+==== cbt-complete-nul ====
+
+0
+3200320032000a780061000000
+
+
+==== cbt-complete-unmatched-lf ====
+
+2
+
+0
+
+
+==== cbt-complete-equal-prefix-only-lf ====
+
+2
+
+0
+
+
+==== cbt-complete-empty-prefix-lf ====
+
+2
+2
+x
+
+0
+
+
+==== cbt-complete-empty-prefix-nul ====
+
+0
+32003200780000
+
+
 ==== cbt-response-per-request-lf ====
 
 320a
@@ -893,6 +940,8 @@ cbt: fatal: after: missing operand
 1
 cbt: fatal: list: missing operand
 1
+cbt: fatal: complete: missing operand
+1
 cbt: fatal: load: missing operand
 1
 cbt: fatal: save: missing operand
@@ -949,6 +998,12 @@ cbt: fatal: list: output failed
 1
 
 
+==== cbt-complete-output-failed ====
+
+cbt: fatal: complete: output failed
+1
+
+
 ==== cbt-write-output-failed ====
 
 cbt: fatal: write: output failed
@@ -959,6 +1014,9 @@ cbt: fatal: write: output failed
 
 2
 cbt: fatal: list: out of memory
+1
+2
+cbt: fatal: complete: out of memory
 1
 2
 cbt: fatal: write: out of memory

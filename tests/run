@@ -673,6 +673,27 @@ _run cbt-list-empty-matched-nul
 { printf 'add x\000list \000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
 _hex < "${basedir}/nul-output"
 
+_run cbt-complete-lf
+_cbt_installed 'add c' 'add ca' 'add cb' 'complete c' 'complete z'
+
+_run cbt-complete-nul
+{ printf 'add c\000add c\nx\000add ca\000complete c\000complete z\000' \
+| "${home}/tests/prefix/bin/cbt" -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
+_run cbt-complete-unmatched-lf
+_cbt 'add ab' 'complete z'
+
+_run cbt-complete-equal-prefix-only-lf
+_cbt 'add ab' 'complete ab'
+
+_run cbt-complete-empty-prefix-lf
+_cbt 'add ' 'add x' 'complete '
+
+_run cbt-complete-empty-prefix-nul
+{ printf 'add \000add x\000complete \000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
 _run cbt-response-per-request-lf
 _exchange '' 'add a\n' 'has a\n'
 
@@ -712,7 +733,7 @@ _run cbt-exit-space
 _cbt_installed 'exit '
 
 _run cbt-missing-operand
-for command in has add rm after list load save
+for command in has add rm after list complete load save
 do
   _cbt_installed "${command}"
 done
@@ -740,6 +761,10 @@ _run cbt-read-malformed
 
 _run cbt-list-output-failed
 awk 'BEGIN { print "read"; for (i = 0; i < 10000; i++) print "key" i; print ""; print "list " }' \
+| { "${home}/tests/prefix/bin/cbt" 2>&1 > /dev/full; echo "$?"; } | _sanitize
+
+_run cbt-complete-output-failed
+awk 'BEGIN { print "read"; for (i = 0; i < 10000; i++) print "key" i; print ""; print "complete " }' \
 | { "${home}/tests/prefix/bin/cbt" 2>&1 > /dev/full; echo "$?"; } | _sanitize
 
 _run cbt-write-output-failed
@@ -774,6 +799,7 @@ then
   exit 1
 fi
 _check "${basedir}/cbt_dispatch" limited 'list a'
+_check "${basedir}/cbt_dispatch" limited 'complete a'
 _check "${basedir}/cbt_dispatch" limited write
 printf 'A\n\n' | _check "${basedir}/cbt_dispatch" limited read
 _check "${basedir}/cbt_dispatch" unlimited read < tests
