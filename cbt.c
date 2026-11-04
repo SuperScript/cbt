@@ -474,7 +474,7 @@ static const struct command {
   { "rm", OPERAND_REQUIRED, 1, command_rm },
   { "after", OPERAND_REQUIRED, 0, command_after },
   { "list", OPERAND_OPTIONAL, 0, command_list },
-  { "complete", OPERAND_REQUIRED, 0, command_complete },
+  { "complete", OPERAND_OPTIONAL, 0, command_complete },
   { "load", OPERAND_REQUIRED, 1, command_load },
   { "save", OPERAND_REQUIRED, 0, command_save },
   { "dump", OPERAND_REQUIRED, 0, command_dump },

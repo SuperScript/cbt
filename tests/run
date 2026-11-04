@@ -732,6 +732,13 @@ _run cbt-complete-empty-prefix-nul
 { printf 'add \000add x\000complete \000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
 _hex < "${basedir}/nul-output"
 
+_run cbt-complete-bare-lf
+_cbt 'add ' 'add x' 'add ab' 'complete'
+
+_run cbt-complete-bare-nul
+{ printf 'add a\000complete\000' | ./cbt -0 > "${basedir}/nul-output"; echo "$?"; } | _sanitize
+_hex < "${basedir}/nul-output"
+
 _run cbt-response-per-request-lf
 _exchange '' 'add a\n' 'has a\n'
 
@@ -771,7 +778,7 @@ _run cbt-exit-space
 _cbt_installed 'exit '
 
 _run cbt-missing-operand
-for command in has add rm after complete load save dump
+for command in has add rm after load save dump
 do
   _cbt_installed "${command}"
 done
@@ -1229,6 +1236,10 @@ _cbt_mapped "${basedir}/none.dump" 'has x' 'after ' 'list ' 'complete ' 'write'
 _run cbt-mmap-list-bare
 _dump "${basedir}/m.dump" ca a
 _cbt_mapped "${basedir}/m.dump" 'list'
+
+_run cbt-mmap-complete-bare
+_dump "${basedir}/m.dump" ca a
+_cbt_mapped "${basedir}/m.dump" 'complete'
 
 _run cbt-mmap-empty-key
 _dump "${basedir}/empty-key.dump" ''

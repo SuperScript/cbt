@@ -878,6 +878,23 @@ x
 32003200780000
 
 
+==== cbt-complete-bare-lf ====
+
+2
+2
+2
+ab
+x
+
+0
+
+
+==== cbt-complete-bare-nul ====
+
+0
+3200610000
+
+
 ==== cbt-response-per-request-lf ====
 
 320a
@@ -960,8 +977,6 @@ cbt: fatal: add: missing operand
 cbt: fatal: rm: missing operand
 1
 cbt: fatal: after: missing operand
-1
-cbt: fatal: complete: missing operand
 1
 cbt: fatal: load: missing operand
 1
@@ -1283,6 +1298,14 @@ cbt: fatal: clear: unexpected operand
 
 
 ==== cbt-mmap-list-bare ====
+
+a
+ca
+
+0
+
+
+==== cbt-mmap-complete-bare ====
 
 a
 ca
